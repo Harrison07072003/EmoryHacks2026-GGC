@@ -15,6 +15,9 @@ export { saveJson, downloadJson } from './ui/save-file.js';
 export { createTelemetry } from './telemetry/telemetry.js';
 export { VERSIONS } from './version.js';
 export { evaluateRecording } from './simulator/evaluate.js';
+export { evaluatePlay } from './simulator/evaluate-play.js';
+export { runTestRun } from './testrun/runner.js';
+export { buildTestRun } from './testrun/script.js';
 
 /**
  * Live webcam eye-controller.

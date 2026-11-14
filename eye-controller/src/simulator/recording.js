@@ -4,22 +4,34 @@ import { FEATURE_VERSION } from '../cv/features.js';
 import { round } from '../util/math.js';
 import { saveJson } from '../ui/save-file.js';
 
-const slim = (frame, target) => frame.face
-  ? { t: round(frame.t, 1), face: true, blink: !!frame.blink, f: frame.f.map(v => round(v)), eyes: frame.eyes, head: frame.head, box: frame.box, ms: frame.ms === undefined ? undefined : round(frame.ms, 1), target: target ?? null }
-  : { t: round(frame.t, 1), face: false, target: target ?? null };
+/**
+ * One recorded frame: the measurements, where the player should have been looking
+ * (`target`, with `src` 'calibration' or 'game' and the game's id in `tid`), and what the
+ * tracker reported live (`out`).
+ */
+function slim(sample) {
+  const fr = sample.frame, base = { t: round(fr.t, 1), face: !!fr.face };
+  if (sample.target) Object.assign(base, { target: sample.target, src: sample.targetSource, tid: sample.targetId ?? undefined });
+  if (sample.gaze || sample.lane !== null) base.out = { x: sample.gaze ? round(sample.gaze.x, 4) : null, y: sample.gaze ? round(sample.gaze.y, 4) : null, lane: sample.lane, band: sample.band };
+  if (!fr.face) return base;
+  return { ...base, blink: !!fr.blink, f: fr.f.map(v => round(v)), eyes: fr.eyes, head: fr.head, box: fr.box, ms: fr.ms === undefined ? undefined : round(fr.ms, 1) };
+}
 
 /**
- * Start recording a controller. While a calibration is running each frame is labelled with
- * the dot that was on screen, which is the ground truth used when replaying.
+ * Start recording a controller. Calibration frames are labelled with the dot on screen and
+ * game frames with whatever the game passed to setTarget; that is the ground truth used when
+ * scoring. The calibration in use when recording starts is stored in `meta.calibrationPoints`,
+ * so a clip without its own calibration (e.g. a drift check) can still be replayed.
  */
 export function createRecorder(controller, meta = {}) {
-  const frames = [];
-  const off = controller.debug.on('frame', frame => frames.push(slim(frame, controller.debug.calibrationTarget())));
+  const frames = [], cal = controller.debug.engine.calibration;
+  const calibrationPoints = cal ? cal.points.filter(p => p.kept).map(p => ({ target: p.target, steadiness: round(p.steadiness ?? 0, 3), samples: p.samples.map(f => f.map(v => round(v))) })) : null;
+  const off = controller.onSample(sample => frames.push(slim(sample)));
   return {
     get length() { return frames.length; },
     stop() {
       off();
-      return { featureVersion: FEATURE_VERSION, recordedAt: new Date().toISOString(), meta, frames };
+      return { featureVersion: FEATURE_VERSION, recordedAt: new Date().toISOString(), meta: { ...meta, calibrationPoints }, frames };
     },
   };
 }

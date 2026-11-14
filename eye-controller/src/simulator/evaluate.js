@@ -10,7 +10,7 @@ export function labelledPoints(recording, { settleMs = 500, maxSamples = 18 } = 
   const points = [];
   let cur = null;
   for (const fr of recording.frames) {
-    const tg = fr.target;
+    const tg = fr.src === 'game' ? null : fr.target; // older clips have no src: all calibration
     if (!tg) { cur = null; continue; }
     if (!cur || cur.target.x !== tg.x || cur.target.y !== tg.y) points.push((cur = { target: tg, t0: fr.t, samples: [] }));
     if (fr.face && !fr.blink && fr.t - cur.t0 >= settleMs) cur.samples.push(fr.f);

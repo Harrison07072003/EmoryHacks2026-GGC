@@ -1,6 +1,7 @@
 // Tracker debug page: live camera view, eye crops with pupil / iris markers, the camera
 // adjust sliders, calibration, session recording, and baseline export / import.
-import { createEyeController, createRecorder, evaluateRecording, saveJson, saveRecording } from '../src/index.js';
+import { createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
+import { PROTOCOL } from './protocol.js';
 
 const $ = id => document.getElementById(id);
 const eyes = createEyeController();
@@ -46,21 +47,70 @@ $('save').onclick = async () => {
 };
 $('load').onclick = async () => note((await eyes.loadProfile(player())) ? `profile "${player()}" loaded` : `no saved profile called "${player()}"`);
 
-let recorder = null;
+// ---- data collection: one click = calibrate + test run, recorded, saved and scored ----
+const pct = v => (Number.isFinite(v) ? `${Math.round(v * 100)}%` : '-');
+let saved = [], busy = false, recorder = null;
+const selected = () => PROTOCOL.find(p => p.id === document.querySelector('input[name=cond]:checked')?.value) ?? PROTOCOL[0];
+const clipLabel = () => [player(), selected().id, $('label').value.trim()].filter(Boolean).join('-');
+const countOf = cond => saved.filter(f => f.startsWith(`${player()}-${cond.id}_`) || f.startsWith(`${player()}-${cond.id}-`)).length;
+
+async function refreshChecklist(keep = true) {
+  try { saved = (await (await fetch('/__save/recordings')).json()).files; } catch { saved = []; }
+  const current = keep ? selected().id : (PROTOCOL.find(p => countOf(p) < p.clips) ?? PROTOCOL[0]).id;
+  $('protocol').innerHTML = PROTOCOL.map(p => {
+    const n = countOf(p), done = n >= p.clips;
+    return `<label><input type="radio" name="cond" value="${p.id}" ${p.id === current ? 'checked' : ''}>
+      <span>${p.id}${p.calibrate === false ? ' (no calibration)' : ''}</span><span class="${done ? 'done' : ''}">${n}/${p.clips}</span>
+      <span class="hint">${p.text}</span></label>`;
+  }).join('');
+}
+
+function describe(recording) {
+  const cal = evaluateRecording(recording), play = evaluatePlay(recording)?.replay;
+  const lines = [];
+  if (cal.dots) lines.push(`calibration ${cal.fullScore}/100 · held-out error ${pct(cal.errorX)} across, ${pct(cal.errorY)} up-down`);
+  if (play?.jumps) lines.push(`lane jumps: ${pct(play.jumps.hitRate)} hit, ${play.jumps.reactionMs ?? '-'} ms to arrive, ${pct(play.jumps.onTarget)} of the time on target`);
+  if (play?.path) lines.push(`path: ${pct(play.path.errorAtLag)} off the dot, ${play.path.lagMs} ms behind, right lane ${pct(play.path.lane)}`);
+  if (play?.switch) lines.push(`band switches: ${pct(play.switch.hitRate)} hit, ${play.switch.reactionMs ?? '-'} ms to arrive, ${pct(play.switch.onTarget)} on target`);
+  return lines.join('\n');
+}
+
+async function recordClip({ calibrate = selected().calibrate !== false } = {}) {
+  if (busy) return;
+  if (!calibrate && !eyes.debug.engine.calibration) return note('this step needs an existing calibration: record a baseline clip first');
+  busy = true; $('result').textContent = '';
+  const label = clipLabel(), rec = createRecorder(eyes, { label, player: player(), condition: selected().id, settings: { ...cam.settings } });
+  try {
+    if (calibrate) {
+      const cal = await eyes.startCalibration();
+      lastResult = cal;
+      if (cal.aborted) { rec.stop(); return note('clip cancelled, nothing saved'); }
+    }
+    const run = await runTestRun(eyes);
+    const recording = rec.stop();
+    if (run.aborted) return note('clip cancelled, nothing saved');
+    const where = await saveRecording(recording, label);
+    if (calibrate && lastResult.ok) await eyes.saveProfile(player());
+    $('result').textContent = `saved ${where}\n${describe(recording)}`;
+    await refreshChecklist(false);   // move on to the next condition that still needs clips
+  } catch (e) { rec.stop(); note(`clip failed: ${e.message}`); }
+  finally { busy = false; }
+}
+$('clip').onclick = () => recordClip();
+$('testrun').onclick = () => recordClip({ calibrate: false });
+addEventListener('keydown', e => { if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement && e.target.type !== 'radio')) recordClip(); });
+$('player').addEventListener('change', () => refreshChecklist());
+
 $('record').onclick = async () => {
   if (!recorder) {
-    recorder = createRecorder(eyes, { label: $('label').value, settings: { ...cam.settings } });
+    recorder = createRecorder(eyes, { label: clipLabel(), settings: { ...cam.settings } });
     $('record').textContent = 'Stop + save';
     return;
   }
   const recording = recorder.stop();
   recorder = null; $('record').textContent = 'Start recording';
-  const where = await saveRecording(recording, $('label').value);
-  // score it on the spot: calibrate on half the dots, test on the other half
-  const r = evaluateRecording(recording), pct = v => (Number.isFinite(v) ? `${(v * 100).toFixed(0)}%` : 'n/a');
-  note(`saved ${recording.frames.length} frames to ${where}\n` + (r.perPoint.length
-    ? `score ${r.fullScore}/100, error ${pct(r.errorX)} across / ${pct(r.errorY)} up-down, lanes ${pct(r.laneAccuracy)}, bands ${pct(r.bandAccuracy)}`
-    : 'no calibration dots in this clip, so it cannot be scored: press Calibrate while recording'));
+  $('result').textContent = `saved ${await saveRecording(recording, clipLabel())}\n${describe(recording) || 'nothing to score: run a calibration or test run while recording'}`;
+  refreshChecklist();
 };
 $('export').onclick = async () => {
   const pool = await eyes.exportBaseline();
@@ -111,5 +161,6 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
+refreshChecklist(false);
 try { await eyes.init(); await eyes.loadProfile(player()); } catch (err) { note(`could not start: ${err.message}`); }
 draw();

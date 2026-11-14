@@ -2,7 +2,8 @@
 // the browser's Downloads folder. Not part of the production build.
 //   POST /__save/recordings?name=label  -> recordings/<label>_<date-time>.json
 //   POST /__save/baselines?name=label   -> baselines/<label>_<date-time>.json
-import { mkdirSync, writeFileSync } from 'node:fs';
+//   GET  /__save/recordings             -> { files: [...] }
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,8 +24,12 @@ export function saveRecordings() {
       server.middlewares.use('/__save', (req, res) => {
         const reply = (status, body) => { res.statusCode = status; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body)); };
         const url = new URL(req.url, 'http://localhost'), kind = url.pathname.replace(/^\/+|\/+$/g, '');
-        if (req.method !== 'POST') return reply(405, { error: 'POST only' });
         if (!Object.hasOwn(KINDS, kind)) return reply(404, { error: 'unknown kind' });
+        if (req.method === 'GET') { // list what is saved, for the debug page's checklist
+          const dir = join(ROOT, kind);
+          return reply(200, { files: existsSync(dir) ? readdirSync(dir).filter(n => n.endsWith('.json')).sort() : [] });
+        }
+        if (req.method !== 'POST') return reply(405, { error: 'GET or POST only' });
         const chunks = [];
         let size = 0;
         req.on('data', c => { size += c.length; if (size <= MAX_BYTES) chunks.push(c); });

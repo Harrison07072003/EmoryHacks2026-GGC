@@ -18,6 +18,14 @@
     h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #8fa; margin: 18px 0 6px; }
     button, a.btn { font: inherit; color: #dde; background: #1a1a2a; border: 1px solid #4de1ff; border-radius: 8px; padding: 7px 10px; cursor: pointer; margin: 0 6px 6px 0; text-decoration: none; display: inline-block; }
     input.text { width: 100%; box-sizing: border-box; font: inherit; color: #dde; background: #1a1a2a; border: 1px solid #445; border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; }
+    button.primary { background: #1f5f78; width: 100%; padding: 10px; font-weight: 600; }
+    #protocol { display: grid; gap: 2px; margin-bottom: 8px; }
+    #protocol label { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin: 0; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+    #protocol label:has(input:checked) { background: #1a2a3a; }
+    #protocol .done { color: #2ecc71; }
+    #protocol .hint { grid-column: 1 / -1; color: #99a; font-size: 12px; display: none; }
+    #protocol label:has(input:checked) .hint { display: block; }
+    #result { color: #ffd34d; }
     #gaze { position: fixed; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; border: 3px solid #ffd34d; pointer-events: none; z-index: 5; }
   </style>
 </head>
@@ -31,15 +39,19 @@
     </section>
     <aside>
       <a class="btn" href="./">Back to Hello Lanes</a>
-      <h2>Calibration</h2>
+      <h2>Data collection</h2>
       <input id="player" class="text" placeholder="player name, e.g. jon">
+      <div id="protocol"></div>
+      <input id="label" class="text" placeholder="extra note for the file name (optional)">
+      <button id="clip" class="primary">Record clip (Enter)</button>
+      <pre id="result"></pre>
+      <h2>Calibration</h2>
       <button id="calibrate">Calibrate</button><button id="quick">Quick</button><button id="topup">Top-up weak</button>
       <button id="save">Save profile</button><button id="load">Load profile</button>
       <h2>Camera adjust</h2>
       <div id="sliders"></div>
-      <h2>Recording</h2>
-      <input id="label" class="text" placeholder="clip label, e.g. jon-dim-glasses">
-      <button id="record">Start recording</button>
+      <h2>Manual recording</h2>
+      <button id="record">Start recording</button><button id="testrun">Test run only</button>
       <h2>Pooled baseline</h2>
       <button id="export">Export</button><button id="import">Import</button>
       <input id="file" type="file" accept="application/json" hidden>

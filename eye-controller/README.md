@@ -138,22 +138,10 @@ the face), `zoom`, `panX`, `panY`.
 
 ## Recording and scoring real sessions
 
-On `/debug.html`: type a clip label (e.g. `jon-dim-glasses`), press "Start recording", run
-a calibration, press "Stop + save". While `npm run dev` is running the clip is written
-straight to `recordings/<label>_<date-time>.json` and scored on the spot. (Without the dev
-server it falls back to a browser download.) The file holds feature frames, no video,
-labelled with the dot that was on screen.
-
-```bash
-npm run replay                                 # score every clip in recordings/
-npm run replay -- recordings/one-clip.json     # one clip, with a row per held-out dot
-```
-
-The batch run prints one row per clip (calibration score, error across and up-down, lane
-and band accuracy, light, pupil contrast, glare, frame rate), the averages, and writes
-`recordings/scores.csv`. Accuracy is measured on held-out dots: it calibrates on every
-second dot and tests on the others. Use the numbers to tune the constants in
-`src/calibration/scoring.js` and `src/smoothing/`.
+See **[docs/data-collection.md](docs/data-collection.md)**. In short: on `/debug.html`
+enter a player name, pick a condition, press **Record clip** (calibration + a 47 s test run
+of lane jumps, a moving path and band switches). Clips land in `recordings/`;
+`npm run replay` scores them all and writes `recordings/scores.csv`.
 
 ## Players and the pooled baseline
 
@@ -210,7 +198,9 @@ recordings/           recorded clips (written by the debug page)
 baselines/            exported pooled baselines
 src/simulator/        fake eye, synthetic source, record / replay / evaluate
 src/telemetry/        buffered, retrying upload of per-frame samples to a database
-docs/                 database-brief.md: what data exists and how to collect it
+src/testrun/          scripted test run (jumps, path, band switches) and its full-screen player
+docs/                 data-collection.md (how to record and score clips), database-brief.md
+harness/protocol.js   the data-collection checklist
 src/ui/               default calibration overlay
 harness/              hello-lanes (example game) and the debug page
 test/                 Vitest suites
