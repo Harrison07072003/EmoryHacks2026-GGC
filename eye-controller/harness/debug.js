@@ -1,6 +1,6 @@
 // Tracker debug page: live camera view, eye crops with pupil / iris markers, the camera
 // adjust sliders, calibration, session recording, and baseline export / import.
-import { createEyeController, createRecorder, evaluateRecording, saveRecording } from '../src/index.js';
+import { createEyeController, createRecorder, evaluateRecording, saveJson, saveRecording } from '../src/index.js';
 
 const $ = id => document.getElementById(id);
 const eyes = createEyeController();
@@ -34,8 +34,17 @@ const calibrate = async opts => { try { lastResult = await eyes.startCalibration
 $('calibrate').onclick = () => calibrate({});
 $('quick').onclick = () => calibrate({ quick: true });
 $('topup').onclick = () => calibrate({ topUp: true });
-$('save').onclick = async () => note((await eyes.saveProfile()) ? 'profile saved' : 'nothing to save: calibrate first');
-$('load').onclick = async () => note((await eyes.loadProfile()) ? 'profile loaded' : 'no saved profile');
+// One profile per player name. Saving a good calibration also adds that player to the pooled
+// baseline; saving the same name again replaces their entry instead of counting them twice.
+const player = () => $('player').value.trim().toLowerCase() || 'default';
+$('player').value = localStorage.getItem('eyectl-debug:player') ?? '';
+$('player').onchange = () => localStorage.setItem('eyectl-debug:player', $('player').value);
+$('save').onclick = async () => {
+  if (!(await eyes.saveProfile(player()))) return note('nothing to save: calibrate first');
+  const pool = await eyes.exportBaseline();
+  note(`profile "${player()}" saved${eyes.state.ready ? '' : ' (score too low to join the pool)'}. Pool now holds ${pool.players} player(s).`);
+};
+$('load').onclick = async () => note((await eyes.loadProfile(player())) ? `profile "${player()}" loaded` : `no saved profile called "${player()}"`);
 
 let recorder = null;
 $('record').onclick = async () => {
@@ -50,16 +59,20 @@ $('record').onclick = async () => {
   // score it on the spot: calibrate on half the dots, test on the other half
   const r = evaluateRecording(recording), pct = v => (Number.isFinite(v) ? `${(v * 100).toFixed(0)}%` : 'n/a');
   note(`saved ${recording.frames.length} frames to ${where}\n` + (r.perPoint.length
-    ? `held-out error ${pct(r.meanError)} of screen, lane accuracy ${pct(r.laneAccuracy)}, band accuracy ${pct(r.bandAccuracy)}`
+    ? `score ${r.fullScore}/100, error ${pct(r.errorX)} across / ${pct(r.errorY)} up-down, lanes ${pct(r.laneAccuracy)}, bands ${pct(r.bandAccuracy)}`
     : 'no calibration dots in this clip, so it cannot be scored: press Calibrate while recording'));
 };
 $('export').onclick = async () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(await eyes.exportBaseline())], { type: 'application/json' }));
-  Object.assign(document.createElement('a'), { href: url, download: 'baseline.json' }).click();
+  const pool = await eyes.exportBaseline();
+  if (!pool.players) return note('the pool is empty: calibrate, then Save profile first');
+  note(`pool of ${pool.players} player(s) saved to ${await saveJson('baselines', pool, `baseline-${pool.players}-players`)}`);
 };
 $('import').onclick = () => $('file').click();
 $('file').onchange = async e => {
-  try { await eyes.importBaseline(JSON.parse(await e.target.files[0].text())); note('baseline merged'); }
+  try {
+    await eyes.importBaseline(JSON.parse(await e.target.files[0].text()));
+    note(`baseline merged. Pool now holds ${(await eyes.exportBaseline()).players} player(s).`);
+  }
   catch (err) { note(`import failed: ${err.message}`); }
 };
 let message = '';
@@ -98,5 +111,5 @@ function draw() {
   requestAnimationFrame(draw);
 }
 
-try { await eyes.init(); await eyes.loadProfile(); } catch (err) { note(`could not start: ${err.message}`); }
+try { await eyes.init(); await eyes.loadProfile(player()); } catch (err) { note(`could not start: ${err.message}`); }
 draw();
