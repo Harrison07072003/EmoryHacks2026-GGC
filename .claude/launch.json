@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "eye-controller", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "eye-controller", "run", "dev", "--", "--port", "5183", "--strictPort"], "port": 5183 }
+  ]
+}
