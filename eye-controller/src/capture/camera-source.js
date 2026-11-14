@@ -12,6 +12,10 @@ import { clamp, ramp } from '../util/math.js';
 const MAX_WORK_WIDTH = 960;   // the detector never sees more pixels than this
 const METER_EVERY = 8;        // frames between exposure measurements
 const BLINK = { blendshape: 0.45, openness: 0.12 };
+// MediaPipe's own eye-direction scores. Recorded (not yet used by the model) so clips can
+// show whether they fix our weak vertical signal before the feature layout is changed.
+const EYE_SHAPES = ['eyeLookUpLeft', 'eyeLookUpRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
+  'eyeLookOutLeft', 'eyeLookOutRight', 'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight', 'eyeBlinkLeft', 'eyeBlinkRight'];
 
 const canvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
 
@@ -111,6 +115,7 @@ export class CameraSource {
       f: assembleFeatures(R, Le, head),
       eyes: { R: info(R), L: info(Le) },
       head, box, exposure: this.exposure,
+      shapes: Object.fromEntries(EYE_SHAPES.map(k => [k, Math.round((shapes[k] ?? 0) * 1000) / 1000])),
       ms: performance.now() - t, // time spent on this frame: detector + eye crops + pupil finder
     });
   }

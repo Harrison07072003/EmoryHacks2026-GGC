@@ -32,6 +32,7 @@ export function toRow(sample) {
     target_id: sample.targetId, target_source: sample.targetSource,
     r_open: r3(R?.open), r_glare: r3(R?.glare), r_contrast: r3(R?.conf), r_light: r3(R?.lum),
     l_open: r3(L?.open), l_glare: r3(L?.glare), l_contrast: r3(L?.conf), l_light: r3(L?.lum),
+    eye_shapes: fr.shapes ?? null,        // MediaPipe eyeLook* / squint / wide / blink scores, 0-1
     process_ms: r3(fr.ms),
   };
 }

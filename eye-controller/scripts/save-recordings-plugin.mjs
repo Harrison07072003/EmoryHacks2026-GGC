@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { slug } from '../src/util/slug.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_BYTES = 50e6;
@@ -14,8 +15,8 @@ const KINDS = {
   baselines: data => typeof data.players === 'number' && !!data.gram,
 };
 
-/** Label -> safe file name: letters, digits, dash and underscore only. */
-export const safeName = label => (label || 'session').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'session';
+/** Label -> safe file name. Shared with the debug page so its checklist matches saved files. */
+export const safeName = label => slug(label) || 'session';
 
 export function saveRecordings() {
   return {

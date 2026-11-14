@@ -2,6 +2,7 @@
 // adjust sliders, calibration, session recording, and baseline export / import.
 import { createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
 import { PROTOCOL } from './protocol.js';
+import { slug } from '../src/util/slug.js';
 
 const $ = id => document.getElementById(id);
 const eyes = createEyeController();
@@ -37,7 +38,8 @@ $('quick').onclick = () => calibrate({ quick: true });
 $('topup').onclick = () => calibrate({ topUp: true });
 // One profile per player name. Saving a good calibration also adds that player to the pooled
 // baseline; saving the same name again replaces their entry instead of counting them twice.
-const player = () => $('player').value.trim().toLowerCase() || 'default';
+// normalized the same way file names are, so 'Jonathan Zaharia' and 'jonathan-zaharia' are one player
+const player = () => slug($('player').value) || 'default';
 $('player').value = localStorage.getItem('eyectl-debug:player') ?? '';
 $('player').onchange = () => localStorage.setItem('eyectl-debug:player', $('player').value);
 $('save').onclick = async () => {
@@ -51,7 +53,7 @@ $('load').onclick = async () => note((await eyes.loadProfile(player())) ? `profi
 const pct = v => (Number.isFinite(v) ? `${Math.round(v * 100)}%` : '-');
 let saved = [], busy = false, recorder = null;
 const selected = () => PROTOCOL.find(p => p.id === document.querySelector('input[name=cond]:checked')?.value) ?? PROTOCOL[0];
-const clipLabel = () => [player(), selected().id, $('label').value.trim()].filter(Boolean).join('-');
+const clipLabel = () => [player(), selected().id, slug($('label').value)].filter(Boolean).join('-');
 const countOf = cond => saved.filter(f => f.startsWith(`${player()}-${cond.id}_`) || f.startsWith(`${player()}-${cond.id}-`)).length;
 
 async function refreshChecklist(keep = true) {

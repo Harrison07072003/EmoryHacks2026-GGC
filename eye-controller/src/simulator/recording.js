@@ -14,7 +14,7 @@ function slim(sample) {
   if (sample.target) Object.assign(base, { target: sample.target, src: sample.targetSource, tid: sample.targetId ?? undefined });
   if (sample.gaze || sample.lane !== null) base.out = { x: sample.gaze ? round(sample.gaze.x, 4) : null, y: sample.gaze ? round(sample.gaze.y, 4) : null, lane: sample.lane, band: sample.band };
   if (!fr.face) return base;
-  return { ...base, blink: !!fr.blink, f: fr.f.map(v => round(v)), eyes: fr.eyes, head: fr.head, box: fr.box, ms: fr.ms === undefined ? undefined : round(fr.ms, 1) };
+  return { ...base, blink: !!fr.blink, f: fr.f.map(v => round(v)), eyes: fr.eyes, head: fr.head, box: fr.box, shapes: fr.shapes, ms: fr.ms === undefined ? undefined : round(fr.ms, 1) };
 }
 
 /**

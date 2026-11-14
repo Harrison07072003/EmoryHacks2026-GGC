@@ -16,7 +16,7 @@ database prompt with what the code really does. Written 2026-11-14; the tracker 
 | Head rotation (pitch, yaw, roll) | Yaw and pitch only. Roll is not calculated. We also have face centre x, y and face width. |
 | Eye visibility / tracking status | Not available. Per eye we have openness, glare fraction, pupil contrast and brightness. |
 | Detection confidence | Ours, not MediaPipe's: `quality` 0-100 (calibration score scaled down by light, glare, framing, head drift). |
-| Blendshape scores | Only the two blink scores are used, and only as one boolean `blink`. No blendshape values are kept. |
+| Blendshape scores | The 14 eye-related scores (eyeLook up/down/in/out, squint, wide, blink, per eye) are recorded per frame as `eye_shapes`. Blink feeds the `blink` boolean; the rest are recorded for analysis, not used by the model yet. |
 | Raw landmark information | Not kept. 478 points per frame is too much and not needed; the 19 features are what the model consumes. |
 | Frame processing time | Measured per frame on the live camera (`process_ms`: detector + eye crops + pupil finder). |
 | 30-60 samples per second | 30 measured on our laptops. |

@@ -6,6 +6,8 @@ internals.
 
 ## Run
 
+**Recording clips?** Follow [docs/START-HERE.md](docs/START-HERE.md).
+
 ```bash
 npm install     # also copies the MediaPipe wasm runtime into public/mediapipe/
 npm run fetch-model   # once: saves the face model locally so tracking works offline
