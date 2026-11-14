@@ -2,9 +2,10 @@
 // exact same pipeline. This is how accuracy gets tuned against real, messy data.
 import { FEATURE_VERSION } from '../cv/features.js';
 import { round } from '../util/math.js';
+import { saveJson } from '../ui/save-file.js';
 
 const slim = (frame, target) => frame.face
-  ? { t: round(frame.t, 1), face: true, blink: !!frame.blink, f: frame.f.map(v => round(v)), eyes: frame.eyes, head: frame.head, box: frame.box, target: target ?? null }
+  ? { t: round(frame.t, 1), face: true, blink: !!frame.blink, f: frame.f.map(v => round(v)), eyes: frame.eyes, head: frame.head, box: frame.box, ms: frame.ms === undefined ? undefined : round(frame.ms, 1), target: target ?? null }
   : { t: round(frame.t, 1), face: false, target: target ?? null };
 
 /**
@@ -23,27 +24,8 @@ export function createRecorder(controller, meta = {}) {
   };
 }
 
-/** Offer a recording as a .json download (browser only). */
-export function downloadRecording(recording, name = 'session') {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(recording)], { type: 'application/json' }));
-  Object.assign(document.createElement('a'), { href: url, download: `${name}.json` }).click();
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Save a recording into the project's recordings/ folder through the dev server.
- * Falls back to a browser download when that is not available (e.g. a production build).
- * @returns where it went, e.g. 'recordings/jon-dim_2026-11-14-17-02-11.json' or 'Downloads'
- */
-export async function saveRecording(recording, name = 'session') {
-  try {
-    const res = await fetch(`/__recordings?name=${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(recording) });
-    const type = res.headers.get('content-type') ?? '';
-    if (res.ok && type.includes('json')) return (await res.json()).file;
-  } catch { /* no dev server: fall through */ }
-  downloadRecording(recording, name);
-  return 'Downloads';
-}
+/** Save a recording into recordings/ (or the Downloads folder without the dev server). */
+export const saveRecording = (recording, name = 'session') => saveJson('recordings', recording, name);
 
 /** Frame source that plays a recording. Same shape as CameraSource / SyntheticSource. */
 export class ReplaySource {

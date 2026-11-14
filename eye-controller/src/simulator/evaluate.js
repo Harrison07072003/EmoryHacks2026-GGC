@@ -1,4 +1,4 @@
-// Score a recording offline: calibrate on half of the labelled dots, test on the other half.
+// Score recordings offline: calibrate on half of the labelled dots, test on the other half.
 import { fitCalibration } from '../calibration/fit.js';
 import { steadinessOf } from '../calibration/scoring.js';
 import { predictGaze } from '../model/gaze-model.js';
@@ -21,15 +21,31 @@ export function labelledPoints(recording, { settleMs = 500, maxSamples = 18 } = 
   });
 }
 
+/** Average capture conditions over the frames with a face: frame rate, light, contrast, glare. */
+export function conditionsOf(recording) {
+  const frames = recording.frames, face = frames.filter(f => f.face);
+  const gaps = frames.slice(1).map((f, i) => f.t - frames[i].t).sort((a, b) => a - b);
+  const eyeMean = key => mean(face.map(f => (f.eyes.R[key] + f.eyes.L[key]) / 2));
+  return {
+    fps: gaps.length ? 1000 / gaps[gaps.length >> 1] : NaN,
+    faceVisible: frames.length ? face.length / frames.length : 0,
+    light: eyeMean('lum'), pupilContrast: eyeMean('conf'), glare: eyeMean('glare'),
+  };
+}
+
 /**
- * @returns { calibrationScore, meanError, laneAccuracy, bandAccuracy, perPoint }
- *          measured on held-out points (every second dot), so it is an honest estimate.
+ * Score a recording. Accuracy numbers are measured on held-out dots (calibrate on every
+ * second dot, test on the others), so they are an honest and slightly pessimistic estimate:
+ * the live game calibrates on all of them.
+ * @returns { dots, fullScore, calibrationScore, meanError, errorX, errorY, laneAccuracy,
+ *            bandAccuracy, perPoint }   fullScore = score of a calibration on all dots
  */
 export function evaluateRecording(recording, { layout = DEFAULT_LAYOUT, prior = null } = {}) {
   const points = labelledPoints(recording);
   const train = points.filter((_, i) => i % 2 === 0), test = points.filter((_, i) => i % 2 === 1);
   const fit = fitCalibration(train, { layout, prior });
-  if (!fit.model || !test.length) return { calibrationScore: fit.score, meanError: NaN, laneAccuracy: NaN, bandAccuracy: NaN, perPoint: [] };
+  const summary = { dots: points.length, fullScore: points.length ? fitCalibration(points, { layout, prior }).score : 0, calibrationScore: fit.score };
+  if (!fit.model || !test.length) return { ...summary, meanError: NaN, errorX: NaN, errorY: NaN, laneAccuracy: NaN, bandAccuracy: NaN, perPoint: [] };
   let laneHits = 0, bandHits = 0, cellFrames = 0;
   const perPoint = test.map(p => {
     const preds = p.samples.map(f => predictGaze(fit.model, f));
@@ -39,11 +55,16 @@ export function evaluateRecording(recording, { layout = DEFAULT_LAYOUT, prior = 
       if (laneOf(g.x, layout.lanes) === cell.lane) laneHits++;
       if (bandOf(g.y, layout.bandSplit) === cell.band) bandHits++;
     }
-    return { target: p.target, steadiness: p.steadiness, error: mean(preds.map(g => Math.hypot(g.x - p.target.x, g.y - p.target.y))) };
+    return {
+      target: p.target, steadiness: p.steadiness,
+      error: mean(preds.map(g => Math.hypot(g.x - p.target.x, g.y - p.target.y))),
+      errorX: mean(preds.map(g => Math.abs(g.x - p.target.x))), errorY: mean(preds.map(g => Math.abs(g.y - p.target.y))),
+    };
   });
   return {
-    calibrationScore: fit.score,
+    ...summary,
     meanError: mean(perPoint.map(p => p.error)),
+    errorX: mean(perPoint.map(p => p.errorX)), errorY: mean(perPoint.map(p => p.errorY)),
     laneAccuracy: cellFrames ? laneHits / cellFrames : NaN,
     bandAccuracy: cellFrames ? bandHits / cellFrames : NaN,
     perPoint,

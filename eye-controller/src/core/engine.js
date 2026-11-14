@@ -19,11 +19,34 @@ export class Engine {
     this.presence = new FacePresence();
     this.quality = new QualityTracker();
     this.model = null; this.calibration = null; this.session = null; this.lastFrame = null; this.mix = 0;
+    this.gameTarget = null;
   }
 
   handleFrame(frame) {
     this.lastFrame = frame;
     this.emit('frame', frame);
+    const dot = this.session?.target ?? null; // read before processing: the session may move on
+    this.process(frame);
+    this.emit('sample', this.sampleOf(frame, dot));
+  }
+
+  /** Label the frames that follow with where the player should be looking (null to clear). */
+  setTarget(target, id = null) { this.gameTarget = target ? { x: target.x, y: target.y, id } : null; }
+
+  /** Everything known about one frame, in one object: measurements, model output, target. */
+  sampleOf(frame, dot) {
+    const s = this.state, target = dot ?? this.gameTarget;
+    return {
+      frame,
+      gaze: this.model && frame.face ? { x: s.gaze.x, y: s.gaze.y } : null,
+      lane: s.lane, band: s.band, quality: s.quality, ready: s.ready,
+      target: target ? { x: target.x, y: target.y } : null,
+      targetId: dot ? null : this.gameTarget?.id ?? null,
+      targetSource: dot ? 'calibration' : this.gameTarget ? 'game' : null,
+    };
+  }
+
+  process(frame) {
     const s = this.state;
 
     const change = this.presence.update(frame.face, frame.t);

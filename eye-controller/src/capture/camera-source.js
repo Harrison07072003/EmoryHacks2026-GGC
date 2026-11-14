@@ -89,7 +89,7 @@ export class CameraSource {
     if (!raw) {
       if (this.settings.autoCenter) { this.follower.reset(); this.roi = { x: 0, y: 0, w: 1, h: 1 }; } // look at the whole frame again
       if (this.frameCount++ % METER_EVERY === 0) this.measure({ x: 0, y: 0, w: 1, h: 1 }, vw, vh);
-      return this.onFrame?.({ t, face: false });
+      return this.onFrame?.({ t, face: false, ms: performance.now() - t });
     }
 
     // landmarks come back relative to the crop; put them in full-frame coordinates
@@ -111,6 +111,7 @@ export class CameraSource {
       f: assembleFeatures(R, Le, head),
       eyes: { R: info(R), L: info(Le) },
       head, box, exposure: this.exposure,
+      ms: performance.now() - t, // time spent on this frame: detector + eye crops + pupil finder
     });
   }
 

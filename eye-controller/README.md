@@ -87,7 +87,10 @@ Lanes split `x` into 4 equal columns; `y < 0.5` is the `top` band. Timestamps `t
 | `await saveProfile(id?)` | save the current calibration and add it to the pooled baseline |
 | `await exportBaseline()` / `await importBaseline(data)` | move the pooled baseline between machines |
 
-Extras outside the frozen contract: `eyes.confirmOnTarget({ x, y })` (online refinement: call
+Extras outside the frozen contract: `eyes.setTarget({ x, y }, id)` (tell the tracker where
+the player should be looking, so collected data can be scored), `eyes.onSample(cb)` (one
+object per frame with measurements, gaze and target; see `docs/database-brief.md`),
+`eyes.confirmOnTarget({ x, y })` (online refinement: call
 it when the player has certainly hit a known spot), `eyes.weakCells()`, `eyes.listProfiles()`,
 `eyes.layout`, and on the mock `eyes.mock.step(ms) / lookAt(point) / setConditions(...)`.
 
@@ -133,21 +136,33 @@ face, `B` bad light.
 `equalize` (histogram equalization strength), `autoCenter` (virtual pan/zoom that follows
 the face), `zoom`, `panX`, `panY`.
 
-## Recording and replaying real sessions
+## Recording and scoring real sessions
 
-On `/debug.html`: type a label (e.g. `jon-dim-glasses`), press "Start recording", run a
-calibration, press "Stop + save". While `npm run dev` is running the clip is written straight
-to `recordings/<label>_<date-time>.json` and scored on the spot. (Without the dev server it
-falls back to a browser download.) The file holds feature frames, no video, labelled with
-the dot that was on screen. To score a clip again later:
+On `/debug.html`: type a clip label (e.g. `jon-dim-glasses`), press "Start recording", run
+a calibration, press "Stop + save". While `npm run dev` is running the clip is written
+straight to `recordings/<label>_<date-time>.json` and scored on the spot. (Without the dev
+server it falls back to a browser download.) The file holds feature frames, no video,
+labelled with the dot that was on screen.
 
 ```bash
-npm run replay -- recordings/my-session.json
+npm run replay                                 # score every clip in recordings/
+npm run replay -- recordings/one-clip.json     # one clip, with a row per held-out dot
 ```
 
-prints the calibration score and held-out error, lane accuracy and band accuracy. Keep
-recordings (good light, low light, glare, glasses) in `recordings/` and use them to tune
-the constants in `src/calibration/scoring.js` and `src/smoothing/`.
+The batch run prints one row per clip (calibration score, error across and up-down, lane
+and band accuracy, light, pupil contrast, glare, frame rate), the averages, and writes
+`recordings/scores.csv`. Accuracy is measured on held-out dots: it calibrates on every
+second dot and tests on the others. Use the numbers to tune the constants in
+`src/calibration/scoring.js` and `src/smoothing/`.
+
+## Players and the pooled baseline
+
+- **Save profile** stores the current calibration under the name in the "player name" box,
+  in this browser. Use one name per person; saving the same name again replaces it.
+- Every saved profile with a passing score is also added to the **pooled baseline**: summed
+  statistics across players (no raw samples) that warm-start a new player's model.
+- **Export** writes the pool to `baselines/baseline-<n>-players_<date-time>.json`.
+  **Import** merges a pool file from another machine into this browser's pool.
 
 ## Storage
 
@@ -190,8 +205,12 @@ src/calibration/      targets, adaptive capture, scoring, fitting
 src/smoothing/        median, saccade snap, One Euro, steady-gaze lock
 src/signals/          lanes/bands, face presence, quality score
 src/storage/          key-value adapters, profiles, pooled baseline
-scripts/              copy-mediapipe (postinstall), fetch-model, replay
+scripts/              copy-mediapipe (postinstall), fetch-model, replay, dev-server save plugin
+recordings/           recorded clips (written by the debug page)
+baselines/            exported pooled baselines
 src/simulator/        fake eye, synthetic source, record / replay / evaluate
+src/telemetry/        buffered, retrying upload of per-frame samples to a database
+docs/                 database-brief.md: what data exists and how to collect it
 src/ui/               default calibration overlay
 harness/              hello-lanes (example game) and the debug page
 test/                 Vitest suites

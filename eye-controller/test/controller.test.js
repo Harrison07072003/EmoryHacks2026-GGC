@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockEyeController } from '../src/mock.js';
 import { memoryStore } from '../src/storage/kv.js';
 import { createRecorder, ReplaySource } from '../src/simulator/recording.js';
-import { evaluateRecording, labelledPoints } from '../src/simulator/evaluate.js';
+import { conditionsOf, evaluateRecording, labelledPoints } from '../src/simulator/evaluate.js';
 import { buildController } from '../src/controller.js';
 import { cellCenter, allCells } from '../src/signals/lanes.js';
 
@@ -232,6 +232,11 @@ describe('record and replay', () => {
     expect(labelledPoints(recording)).toHaveLength(16);
     const r = evaluateRecording(recording);
     expect(r.meanError).toBeLessThan(0.06);
+    expect(r.dots).toBe(16);
+    expect(r.fullScore).toBeGreaterThanOrEqual(80);
+    expect(r.errorX).toBeLessThan(r.meanError);
+    expect(conditionsOf(recording)).toMatchObject({ faceVisible: 1 });
+    expect(conditionsOf(recording).fps).toBeCloseTo(30, 0);
     expect(r.laneAccuracy).toBeGreaterThan(0.95);
     expect(r.bandAccuracy).toBeGreaterThan(0.95);
   });

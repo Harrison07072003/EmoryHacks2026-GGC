@@ -34,8 +34,10 @@ export function buildController(source, options = {}) {
     const prior = baseline.samples > 0 ? gramFromJSON(baseline.gram) : null;
     const fit = fitCalibration(points, { layout, prior, headPenalty: options.headPenalty });
     engine.setCalibration(fit);
+    const result = summary(fit);
+    emitter.emit('calibrationResult', result);
     emitter.emit('calibrationComplete', fit.score);
-    return summary(fit);
+    return result;
   }
 
   const keptGram = points => points.filter(p => p.kept).reduce((g, p) => addGram(g, pointGram(p)), createGram(FEATURE_COUNT));
@@ -136,6 +138,19 @@ export function buildController(source, options = {}) {
 
     // ---- extras (useful, but not part of the frozen contract) ----
     layout,
+    /**
+     * One object per camera frame with everything in it: { frame, gaze, lane, band, quality,
+     * ready, target, targetId, targetSource }. This is what data collection listens to.
+     */
+    onSample: cb => emitter.on('sample', cb),
+    /** Full result of every calibration: { score, ok, weakCells, points }. */
+    onCalibrationResult: cb => emitter.on('calibrationResult', cb),
+    /**
+     * Game says "the player should be looking at {x, y} now" (a note, a point on the path).
+     * Samples are labelled with it until it is changed or cleared with null. It does not
+     * affect tracking; it only makes recorded data measurable.
+     */
+    setTarget: (target, id) => engine.setTarget(target, id),
     /** Game says "the player is certainly looking at {x, y} now" -> gentle online refinement. */
     confirmOnTarget: target => engine.confirmOnTarget(target),
     weakCells: () => engine.calibration?.weakCells ?? [],
