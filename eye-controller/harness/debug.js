@@ -1,6 +1,6 @@
 // Tracker debug page: live camera view, eye crops with pupil / iris markers, the camera
 // adjust sliders, calibration, session recording, and baseline export / import.
-import { createEyeController, createRecorder, downloadRecording } from '../src/index.js';
+import { createEyeController, createRecorder, evaluateRecording, saveRecording } from '../src/index.js';
 
 const $ = id => document.getElementById(id);
 const eyes = createEyeController();
@@ -38,9 +38,20 @@ $('save').onclick = async () => note((await eyes.saveProfile()) ? 'profile saved
 $('load').onclick = async () => note((await eyes.loadProfile()) ? 'profile loaded' : 'no saved profile');
 
 let recorder = null;
-$('record').onclick = () => {
-  if (recorder) { downloadRecording(recorder.stop(), `session-${Date.now()}`); recorder = null; $('record').textContent = 'Start recording'; }
-  else { recorder = createRecorder(eyes, { settings: { ...cam.settings } }); $('record').textContent = 'Stop + download'; }
+$('record').onclick = async () => {
+  if (!recorder) {
+    recorder = createRecorder(eyes, { label: $('label').value, settings: { ...cam.settings } });
+    $('record').textContent = 'Stop + save';
+    return;
+  }
+  const recording = recorder.stop();
+  recorder = null; $('record').textContent = 'Start recording';
+  const where = await saveRecording(recording, $('label').value);
+  // score it on the spot: calibrate on half the dots, test on the other half
+  const r = evaluateRecording(recording), pct = v => (Number.isFinite(v) ? `${(v * 100).toFixed(0)}%` : 'n/a');
+  note(`saved ${recording.frames.length} frames to ${where}\n` + (r.perPoint.length
+    ? `held-out error ${pct(r.meanError)} of screen, lane accuracy ${pct(r.laneAccuracy)}, band accuracy ${pct(r.bandAccuracy)}`
+    : 'no calibration dots in this clip, so it cannot be scored: press Calibrate while recording'));
 };
 $('export').onclick = async () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(await eyes.exportBaseline())], { type: 'application/json' }));

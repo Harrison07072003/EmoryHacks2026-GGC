@@ -30,6 +30,21 @@ export function downloadRecording(recording, name = 'session') {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Save a recording into the project's recordings/ folder through the dev server.
+ * Falls back to a browser download when that is not available (e.g. a production build).
+ * @returns where it went, e.g. 'recordings/jon-dim_2026-11-14-17-02-11.json' or 'Downloads'
+ */
+export async function saveRecording(recording, name = 'session') {
+  try {
+    const res = await fetch(`/__recordings?name=${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(recording) });
+    const type = res.headers.get('content-type') ?? '';
+    if (res.ok && type.includes('json')) return (await res.json()).file;
+  } catch { /* no dev server: fall through */ }
+  downloadRecording(recording, name);
+  return 'Downloads';
+}
+
 /** Frame source that plays a recording. Same shape as CameraSource / SyntheticSource. */
 export class ReplaySource {
   constructor(recording, { speed = 1, loop = false } = {}) {

@@ -135,8 +135,11 @@ the face), `zoom`, `panX`, `panY`.
 
 ## Recording and replaying real sessions
 
-On `/debug.html`, press "Start recording", run a calibration, press "Stop + download".
-The file holds feature frames (no video) labelled with the dot that was on screen.
+On `/debug.html`: type a label (e.g. `jon-dim-glasses`), press "Start recording", run a
+calibration, press "Stop + save". While `npm run dev` is running the clip is written straight
+to `recordings/<label>_<date-time>.json` and scored on the spot. (Without the dev server it
+falls back to a browser download.) The file holds feature frames, no video, labelled with
+the dot that was on screen. To score a clip again later:
 
 ```bash
 npm run replay -- recordings/my-session.json

@@ -10,7 +10,8 @@ import { CameraSource } from './capture/camera-source.js';
 export { createMockEyeController } from './mock.js';
 export { buildController } from './controller.js';
 export { memoryStore, localStorageStore, indexedDbStore } from './storage/kv.js';
-export { createRecorder, downloadRecording, ReplaySource } from './simulator/recording.js';
+export { createRecorder, downloadRecording, saveRecording, ReplaySource } from './simulator/recording.js';
+export { evaluateRecording } from './simulator/evaluate.js';
 
 /**
  * Live webcam eye-controller.
