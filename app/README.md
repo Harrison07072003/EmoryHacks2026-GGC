@@ -1,7 +1,8 @@
 # RhythmEyez - eye-controlled party games
 
 Party games you play with your eyes, using only a laptop webcam. No special hardware and no
-cloud: everything runs in the browser, and no video ever leaves the laptop.
+cloud for tracking: everything runs in the browser, and no video ever leaves the laptop
+(optional voice commands use the browser's speech service - see below).
 Built for players with limited hand or arm use, and fun for everyone else.
 
 ## Run it
@@ -13,6 +14,23 @@ npm run dev      # open the localhost link it prints (Chrome)
 Click or press a key once (browsers block sound until you interact with the page).
 After that, everything works with your eyes or head.
 
+## Voice commands (core/voice.js)
+After the first click, the game also listens to the microphone (Chrome/Edge; allow the mic prompt).
+Say a word anywhere in a sentence - the top-right shows "mic on", and what was heard flashes at the bottom
+(green = it was a command).
+
+| Say | Does | Works |
+|---|---|---|
+| "hub" / "home" / "menu" | back to the hub | hub menus + any game page |
+| "piano" / "echo" / "drums" / "horn" | open that game | hub menus + any game page |
+| "again" / "restart" | replay | when a game has ended |
+| "recalibrate" | run calibration | hub menu |
+| "back" | leave Eye debug | Eye debug |
+
+Uses the browser's Web Speech API (`SpeechRecognition`). Note: in Chrome the *audio* is sent to Google's
+speech service to be transcribed (the camera video still never leaves the laptop), so voice needs internet.
+To add a command, add an entry to the `commands` list in `setupVoice()` in `core/shell.js`.
+
 Check the bottom-left corner shows **build 6**. If not, you're on old files: hard-reload with Cmd+Shift+R.
 
 ## Folder layout
@@ -22,6 +40,7 @@ app/
   core/
     gaze-engine.js   <- THE EYE TRACKER (don't edit without telling the team)
     shell.js         <- shared by every page: startup, face check, calibration, menus, preview, debug
+    voice.js         <- spoken commands ("hub", game names) via the Web Speech API
   games/
     piano.js  echo.js  drums.js  horn.js                    <- one file per game, one owner each
   vite.config.js     <- lists the pages for the build

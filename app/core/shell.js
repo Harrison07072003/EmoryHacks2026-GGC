@@ -1,9 +1,11 @@
 // shell.js - shared by every page: startup, face check, calibration, dwell UI, camera preview, debug.
 // A page = boot({ title, game }). No game = the hub menu (index.html).
 import { GazeEngine, EW, EH } from './gaze-engine.js?v=6';
+import { startVoice } from './voice.js?v=6';
 export const VERSION = 'build 6';
 const PROFILE = 'v6';                                          // bump to invalidate old calibrations
-const GAMES = [['Eye Piano', 'piano.html'], ['Echo', 'echo.html'], ['Drum Duel', 'drums.html'], ['Horn', 'horn.html']];
+// [hub button label, page, words you can SAY to open it]
+const GAMES = [['Eye Piano', 'piano.html', ['piano']], ['Echo', 'echo.html', ['echo']], ['Drum Duel', 'drums.html', ['drum', 'drums', 'duel']], ['Horn', 'horn.html', ['horn']]];
 
 export function boot({ title = 'Hub', game = null } = {}) {
   window.__eyezBooted = true;
@@ -25,6 +27,7 @@ export function boot({ title = 'Hub', game = null } = {}) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const hz = semi => 261.63 * 2 ** (semi / 12), SCALE = [0, 2, 4, 5, 7, 9, 11, 12];
   let scene = 'start', ac = null, note = '', mouse = { x: 0, y: 0 }, dot = null, valPts = [];
+  let voice = null, heard = null;                              // heard = { s: text, ok: was it a command, t: time }
   const pointerMode = () => (set.pointer === 'eye' && !E.models ? 'head' : set.pointer);
   const P = () => pointerMode() === 'eye' ? { x: E.out.x, y: E.out.y } : pointerMode() === 'head' ? { x: E.out.headX, y: E.out.headY } : mouse;
 
@@ -100,6 +103,26 @@ export function boot({ title = 'Hub', game = null } = {}) {
       scene = 'start'; console.error(e); return;
     }
     scene = 'position';
+    setupVoice();
+  }
+
+  // ---------- voice commands (core/voice.js) ----------
+  // Only navigate when it's safe: in the hub menus, or on a game page (leaving reloads the page anyway).
+  // Not during calibration/re-anchor on the hub, which are mid-sequence.
+  const navOK = () => !!game || ['menu', 'debug', 'valfail'].includes(scene);
+  function setupVoice() {
+    if (voice) return;
+    voice = startVoice({
+      commands: [
+        { words: ['hub', 'home', 'menu', 'main menu'], when: navOK, run: toMenu },
+        ...GAMES.map(([, url, words]) => ({ words, when: navOK, run: () => go(url) })),
+        { words: ['again', 'restart', 'play again'], when: () => game?.finished, run: restart },
+        { words: ['recalibrate', 'calibrate'], when: () => scene === 'menu', run: calibrate },
+        { words: ['back'], when: () => scene === 'debug', run: toMenu },
+      ],
+      onHeard: (s, cmd) => { heard = { s, ok: !!cmd, t: performance.now() }; if (cmd) tone(660, undefined, 0.12); },
+      onStatus: s => { if (s !== 'listening') note = s; },
+    });
   }
   async function afterPosition() {
     if (E.load(PROFILE)) { valPts = E.profile.val || []; note = 'Look at the dot'; await reanchor(); note = ''; enter(); }
@@ -278,6 +301,8 @@ export function boot({ title = 'Hub', game = null } = {}) {
     if (dot) { const k = Math.min(1, (now - dot.t0) / 1200); g.fillStyle = '#fff'; g.beginPath(); g.arc(dot.x, dot.y, dot.moving ? 14 : 24 - 14 * k, 0, 7); g.fill(); g.fillStyle = '#ff4d6d'; g.beginPath(); g.arc(dot.x, dot.y, 4, 0, 7); g.fill(); }
     if (note) text(note, W / 2, H * 0.12, 26, '#fff');
     if (!['start', 'loading', 'position'].includes(scene)) { const p = P(); g.strokeStyle = '#4de1ff'; g.lineWidth = 3; g.beginPath(); g.arc(p.x, p.y, 14, 0, 7); g.stroke(); }
+    if (heard && now - heard.t < 2000) text(`${heard.ok ? 'Voice: ' : 'Heard: '}"${heard.s}"`, W / 2, H - 70, 22, heard.ok ? '#2ecc71' : '#778');
+    if (voice && scene !== 'start') text('mic on - say "hub"', W - 10, 24, 14, '#556', 'right');
     if (E.lm && !E.out.face && scene !== 'start') text('FACE LOST - look at the screen', W / 2, H - 30, 26, '#e74c3c');
     text(`${title} - ${VERSION}`, 10, H - 10, 13, '#556', 'left');
     requestAnimationFrame(frame);
