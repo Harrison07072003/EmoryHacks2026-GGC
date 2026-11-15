@@ -10,12 +10,13 @@ export default function settings(root, app, { back = 'title' } = {}) {
   const el = html(`
     <section class="screen">
       <h2>Settings</h2>
-      <div class="settings" data-grid></div>
+      <div class="settings-wrap"><div class="settings" data-grid="audio"></div><div class="settings" data-grid="play"></div></div>
       <p class="hint" style="font-size:15px" data-store></p>
     </section>`);
   root.appendChild(el);
   el.appendChild(Object.assign(gazeButton('◀ Back', () => app.go(back), { sound: 'back' }), { className: 'gbtn small purple top-left' }));
-  const grid = el.querySelector('[data-grid]');
+  // two panels side by side so everything fits on one laptop screen (eyes can't scroll)
+  let grid = el.querySelector('[data-grid="audio"]');
 
   function stepper(label, get, set, format, note) {
     const value = html(`<div class="value">${format(get())}</div>`);
@@ -43,7 +44,8 @@ export default function settings(root, app, { back = 'title' } = {}) {
   stepper('Music volume', () => s.music, d => { s.music = clamp01(s.music + d * 0.1); }, pct);
   stepper('Effects volume', () => s.sfx, d => { s.sfx = clamp01(s.sfx + d * 0.1); }, pct);
   stepper('Audio offset', () => s.offsetMs, d => { s.offsetMs += d * 10; }, v => `${v > 0 ? '+' : ''}${v} ms`,
-    'If notes feel late compared with the music, lower this; if early, raise it.');
+    'If notes reach the line after the beat you hear, raise this; if before, lower it.');
+  grid = el.querySelector('[data-grid="play"]');
   toggle('Gaze cursor', 'showGazeCursor');
   choice('Mouse', 'mouseMode', [['off', 'OFF'], ['assist', 'ALLOWED']],
     'Off: eyes only. Allowed: your eyes play, and the mouse steps in only while you move it or your face is lost. If calibration fails twice in a row, the game offers to switch to the mouse.');

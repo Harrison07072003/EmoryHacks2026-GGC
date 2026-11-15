@@ -28,12 +28,13 @@ export const MODES = {
     id: 'normal', label: 'Normal', subtitle: 'Moderate', characterId: 'volt',
     blurb: 'Standard difficulty. Miss too many notes in a row and the song ends.',
     failEnabled: true,
-    approachSec: 1.9,
-    windows: { perfect: 0.12, good: 0.30 },
-    zoneTolerance: 0.03,
-    bandTolerance: 0.06,
-    minDwellMs: 50,
-    curve: { tolerance: 0.12, perfectCoverage: 0.82, goodCoverage: 0.55 },
+    // tuned about halfway between Practice and the old Normal (playtest: the jump was too big)
+    approachSec: 2.15,
+    windows: { perfect: 0.14, good: 0.34 },
+    zoneTolerance: 0.04,
+    bandTolerance: 0.08,
+    minDwellMs: 25,
+    curve: { tolerance: 0.12, perfectCoverage: 0.80, goodCoverage: 0.55 },
   },
   hard: {
     id: 'hard', label: 'Challenge', subtitle: 'Hard', characterId: 'nova',
@@ -60,7 +61,7 @@ export const SCORING = {
 export const HEALTH = {
   max: 100,
   start: 100,
-  missPenalty: { practice: 0, normal: 9, hard: 12 },
+  missPenalty: { practice: 0, normal: 6, hard: 12 },
   regen: { perfect: 2.5, good: 1.2 },
   danger: [               // checked top to bottom; first match wins
     { level: 2, below: 30 },   // darker red, slow pulse

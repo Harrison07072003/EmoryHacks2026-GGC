@@ -68,50 +68,40 @@ describe('UI walk-through (mouse input, simulated DOM)', () => {
     expect(mp.hasAttribute('data-gaze')).toBe(false);  // can never be dwelled on
   });
 
-  it('modes -> songs with three songs; a song opens the YES/NO popup', async () => {
+  it('modes -> songs: the card only previews, SELECT is the only control; no character picker', async () => {
     $$('button.card')[1].click();
     await until(() => app.screen === 'songs');
     expect(app.session.modeId).toBe('normal');
     expect(app.session.characterId).toBe('volt');
     expect($$('.song-card')).toHaveLength(3);
+    expect($$('.song-card[data-gaze]')).toHaveLength(0);           // looking at a card never starts it
+    expect($$('.song-card[data-gaze-hover]')).toHaveLength(3);
+    expect($$('.song-card .song-select[data-gaze]')).toHaveLength(3);
+    expect($$('.gbtn').some(b => b.textContent.includes('Character'))).toBe(false);
     $$('.song-card')[0].click();
-    await until(() => $('.popup'));
-    expect($('#app').inert).toBe(true);
-    byText('.popup .gbtn', 'No').click();
-    await until(() => !$('.popup'));
-    expect($('#app').inert).toBe(false);
+    await sleep(100);
+    expect(app.screen).toBe('songs');
   });
 
-  it('character select changes and remembers the character', async () => {
-    byText('.gbtn', 'Character').click();
-    await until(() => app.screen === 'characters');
-    expect($$('.card .char-portrait')).toHaveLength(3);
-    $$('button.card')[2].click();
-    await until(() => app.screen === 'songs');
-    expect(app.session.characterId).toBe('nova');
-    expect(app.settings.characterId).toBe('nova');
-  });
-
-  it('YES starts the song: countdown, then the song clock runs and notes are judged', async () => {
-    $$('.song-card')[1].click();
-    await until(() => $('.popup'));
-    byText('.popup .gbtn', 'Yes').click();
+  it('SELECT starts the song: countdown, then the song clock runs and notes are judged', async () => {
+    $$('.song-card .song-select')[1].click();
     await until(() => app.screen === 'play');
-    expect($('.play .char-portrait')).toBeTruthy();
-    expect(byText('.gbtn', 'Quit')).toBeTruthy();
+    expect($('.play .char-portrait img')).toBeTruthy();       // the team artwork
+    expect(byText('.gbtn', 'Pause')).toBeTruthy();
     await until(() => app.debugPlay.state() === 'playing', 6000);
     await sleep(3500);
     expect(app.debugPlay.songTime()).toBeGreaterThan(2);
-    // nobody is looking (mouse never moved): notes must have been judged as misses
-    expect(app.debugPlay.scoring().counts.miss).toBeGreaterThan(0);
+    // nobody is looking (mouse never moved): notes must be judged as misses
+    await until(() => app.debugPlay.scoring().counts.miss > 0, 4000);
     expect(app.debugPlay.scoring().health).toBeLessThan(100);
   }, 15000);
 
-  it('Pause freezes the song (Resume / Songs / Home) and Resume continues', async () => {
+  it('Pause (top-right) freezes the song with Resume / Quit, and Resume continues', async () => {
+    expect($$('.play .gbtn').map(b => b.textContent)).toEqual(['❚❚ Pause']);   // one button only
     byText('.gbtn', 'Pause').click();
     await until(() => $('.popup'));
     expect(app.debugPlay.state()).toBe('paused');
-    expect($$('.popup .gbtn').map(b => b.textContent)).toEqual(['Resume', 'Songs', 'Home']);
+    expect($$('.popup .gbtn').map(b => b.textContent)).toEqual(['Resume', 'Quit']);
     const frozen = app.debugPlay.scoring().counts.miss;
     await sleep(1200);
     expect(app.debugPlay.scoring().counts.miss).toBe(frozen);   // nothing is judged while paused
@@ -123,16 +113,10 @@ describe('UI walk-through (mouse input, simulated DOM)', () => {
     await until(() => app.debugPlay.state() === 'playing', 4000);
   }, 20000);
 
-  it('Quit asks first: Keep playing / Song select / Home', async () => {
-    byText('.gbtn', 'Quit').click();
+  it('Quit in the pause popup goes back to song select', async () => {
+    byText('.gbtn', 'Pause').click();
     await until(() => $('.popup'));
-    expect(app.debugPlay.state()).toBe('paused');
-    expect($$('.popup .gbtn').map(b => b.textContent)).toEqual(['Keep playing', 'Song select', 'Home']);
-    byText('.popup .gbtn', 'Keep playing').click();
-    await until(() => app.debugPlay.state() === 'playing', 4000);
-    byText('.gbtn', 'Quit').click();
-    await until(() => $('.popup'));
-    byText('.popup .gbtn', 'Song select').click();
+    byText('.popup .gbtn', 'Quit').click();
     await until(() => app.screen === 'songs');
   }, 15000);
 

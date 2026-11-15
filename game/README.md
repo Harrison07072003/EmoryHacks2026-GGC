@@ -70,8 +70,8 @@ pause or goes back.
   Top-up weak / Redo are pressed by looking at them (a good result continues by itself).
   **Redo is always the full calibration.** Between songs a quick version runs (8 dots on top of
   your current calibration).
-- **Pause:** the Pause button (top right) freezes the song: Resume / Quick recalibrate /
-  Songs / Home. Quit asks before leaving. The song pauses by itself if your face is out of
+- **Pause:** the Pause button (top-right corner) freezes the song and opens Resume / Quit
+  (Quit goes back to song select). The song pauses by itself if your face is out of
   view for 3 s. If tracking drifts (live quality below 30 for 2.5 s: you moved, the light
   changed) it pauses and, after "Recalibrating in 3…" (Cancel = resume), runs a quick
   recalibration on top of the song, then the song carries on. Resume rewinds 1 s and counts in.

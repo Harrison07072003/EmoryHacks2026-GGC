@@ -13,7 +13,6 @@ import { closePopups, toast } from './screens/ui.js';
 import title from './screens/title.js';
 import calibration from './screens/calibration.js';
 import modes from './screens/modes.js';
-import characters from './screens/characters.js';
 import songs from './screens/songs.js';
 import play from './screens/play.js';
 import results from './screens/results.js';
@@ -21,7 +20,7 @@ import settingsScreen from './screens/settings.js';
 import startupError from './screens/startup-error.js';
 import faceCheck from './screens/face-check.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck };
+const SCREENS = { title, calibration, modes, songs, play, results, settings: settingsScreen, startupError, faceCheck };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';

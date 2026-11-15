@@ -32,7 +32,7 @@ describe('first-run calibration flow (simulated gaze)', () => {
     expect(app.gaze.calibrated).toBe(false);
     expect(document.querySelector('#input-badge').textContent).toMatch(/SIMULATED/);
 
-    await until(() => app.screen === 'faceCheck', 6000);            // auto-start after ~3 s of face
+    await until(() => app.screen === 'faceCheck', 14000);           // auto-start after 10 s with a face in view
     await until(() => /Centred in the oval/.test(document.querySelector('.fc-checks')?.textContent ?? ''), 3000);   // the engine's checks
     await until(() => app.screen === 'calibration', 6000);          // all checks green for 1.5 s -> continues by itself
     const layer = document.querySelector('#overlay-layer');

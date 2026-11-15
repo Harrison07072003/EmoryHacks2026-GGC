@@ -1,9 +1,10 @@
-// Song select. Resting the gaze on a song plays an ~8 s preview (one at a time); a 2 s
-// dwell opens the "Play this song?" popup, and YES starts it.
+// Song select. Resting the gaze on a song card plays an ~8 s preview (one at a time); the card
+// itself never starts anything. Each card ends in a SELECT section: a 2 s dwell (or a click)
+// on that section starts the song.
 import { CALIBRATION, DWELL, MODES, PREVIEW } from '../config/game-config.js';
 import { CHARACTERS } from '../characters/characters.js';
 import { SONGS } from '../songs/index.js';
-import { esc, gazeButton, html, popup } from './ui.js';
+import { esc, gazeButton, html } from './ui.js';
 
 /** Start a song: recalibrates first when another song was already played this session. */
 export function startSong(app, songId) {
@@ -19,24 +20,24 @@ export default function songs(root, app) {
   const el = html(`
     <section class="screen">
       <h2>Choose a song</h2>
-      <p class="hint">${esc(mode.label)} mode · ${esc(character.name)} · rest your eyes on a song to hear it, hold for 2 s to pick it</p>
+      <p class="hint">${esc(mode.label)} mode · ${esc(character.name)} · look at a song to hear it, hold your eyes on SELECT to play it</p>
       <div class="song-list"></div>
     </section>`);
   root.appendChild(el);
   el.appendChild(Object.assign(gazeButton('◀ Modes', () => app.go('modes'), { sound: 'back' }), { className: 'gbtn small purple top-left' }));
-  el.appendChild(Object.assign(gazeButton('Character', () => app.go('characters', { back: 'songs' })), { className: 'gbtn small purple top-right' }));
 
   const list = el.querySelector('.song-list'), cards = new Map();
   for (const song of SONGS) {
     const card = html(`
-      <button class="song-card" data-gaze data-song="${esc(song.id)}" style="--sc:${song.palette.accent};--sc2:${song.palette.lane}">
+      <div class="song-card" data-gaze-hover data-song="${esc(song.id)}" style="--sc:${song.palette.accent};--sc2:${song.palette.lane}">
         <div class="disc"></div>
         <div><div class="song-title">${esc(song.title)}</div>
           <div class="song-meta">${esc(song.subtitle)} · ${song.bpm} BPM · ${Math.round(song.durationSec)} s</div>
           <div class="preview-tag" data-tag></div></div>
         <div class="best" data-best>best<b>–</b></div>
-      </button>`);
-    card.addEventListener('click', () => confirm(song));
+        <button class="song-select" data-gaze data-sound="select" data-song="${esc(song.id)}" aria-label="Play ${esc(song.title)}">SELECT</button>
+      </div>`);
+    card.querySelector('.song-select').addEventListener('click', () => { app.music.stop(0.3); startSong(app, song.id); });
     cards.set(song.id, card);
     list.appendChild(card);
   }
@@ -63,17 +64,6 @@ export default function songs(root, app) {
     if (song) hoverTimer = setTimeout(() => preview(song), DWELL.previewDelayMs);
   });
   for (const song of SONGS) cards.get(song.id).addEventListener('pointerenter', () => preview(song));
-
-  function confirm(song) {
-    popup({
-      title: `Play ${esc(song.title)}?`,
-      text: `${esc(mode.label)} mode`,
-      buttons: [
-        { label: 'Yes', onPress: () => { app.music.stop(0.3); startSong(app, song.id); } },
-        { label: 'No', cls: 'purple', sound: 'back', onPress: () => {} },
-      ],
-    });
-  }
 
   return {
     onEscape: () => app.go('modes'),

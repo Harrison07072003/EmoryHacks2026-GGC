@@ -25,7 +25,7 @@ import { esc, gazeButton, html, popup } from './ui.js';
 export default function play(root, app) {
   const song = songById(app.session.songId), mode = MODES[app.session.modeId];
   if (!song || !mode) { queueMicrotask(() => app.go('songs')); return {}; }
-  const character = CHARACTERS[app.session.characterId] ?? CHARACTERS[mode.characterId];
+  const character = CHARACTERS[mode.characterId];
   const { audio, music, sfx, gaze } = app;
   const pal = song.palette;
 
@@ -47,8 +47,7 @@ export default function play(root, app) {
   const portrait = mountPortrait(el, character);
   portrait.classList.add('character');
   const stopBlink = startBlinking(portrait);
-  el.appendChild(gazeButton('Pause', () => pause(), { cls: 'purple small pause-btn' }));
-  el.appendChild(gazeButton('Quit', () => confirmQuit(), { cls: 'danger small quit-btn', sound: 'back' }));
+  el.appendChild(gazeButton('❚❚ Pause', () => pause(), { cls: 'purple small pause-btn' }));
 
   let state = 'loading', chart, judge, scoring, highway, buffer = null, stats, telemetry = null;
   let clock = null, faceLostSince = null, driftSince = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
@@ -126,9 +125,7 @@ export default function play(root, app) {
       text: reason || `${esc(song.title)} · ${esc(mode.label)}`,
       buttons: [
         { label: 'Resume', onPress: resume },
-        ...(canRecalibrate() ? [{ label: 'Quick recalibrate', cls: 'purple', onPress: recalibrateAndResume }] : []),
-        { label: 'Songs', cls: 'purple', sound: 'back', onPress: () => app.go('songs') },
-        { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
+        { label: 'Quit', cls: 'danger', sound: 'back', onPress: () => app.go('songs') },
       ],
     });
   }
@@ -163,19 +160,6 @@ export default function play(root, app) {
     if (gaze.mouseLocked) app.toast('Playing with the mouse: eye input comes back when a calibration passes', 4000);
     driftSince = null; faceLostSince = null;
     resume();
-  }
-
-  function confirmQuit() {
-    if (!halt()) return;
-    popup({
-      title: 'Quit this song?',
-      text: 'Your progress in this song will be lost.',
-      buttons: [
-        { label: 'Keep playing', onPress: resume },
-        { label: 'Song select', cls: 'danger', sound: 'back', onPress: () => app.go('songs') },
-        { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
-      ],
-    });
   }
 
   // ---- judgments ----
