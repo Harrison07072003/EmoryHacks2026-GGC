@@ -1,0 +1,58 @@
+/* Theme tokens. Change the look here: every screen uses these variables.
+   Songs override --song-* on the play screen (see song.json "palette"). */
+:root {
+  --bg-0: #05060a;
+  --bg-1: #0b0d16;
+  --bg-2: #141826;
+  --panel: rgba(18, 22, 36, 0.72);
+  --panel-edge: rgba(120, 255, 200, 0.22);
+  --text: #e6f1ff;
+  --text-dim: #8a93a8;
+  --green: #39ffb0;
+  --green-deep: #0f8f66;
+  --purple: #a45bff;
+  --purple-deep: #4b1f8f;
+  --gray: #6b7186;
+  --danger: #ff3b6b;
+  --gold: #ffd84d;
+  --perfect: #5dfcff;
+  --good: #b6ff5d;
+  --miss: #ff4d6d;
+
+  --font-display: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --radius: 18px;
+  --glow-green: 0 0 18px rgba(57, 255, 176, 0.55), 0 0 42px rgba(57, 255, 176, 0.2);
+  --glow-purple: 0 0 18px rgba(164, 91, 255, 0.6), 0 0 42px rgba(164, 91, 255, 0.25);
+
+  /* defaults for the play screen; each song replaces these */
+  --song-bg1: #0b0820;
+  --song-bg2: #1c1340;
+  --song-lane: #8fb8ff;
+  --song-accent: #c7a6ff;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg-0); color: var(--text); font: 600 18px/1.35 var(--font-body); }
+body { cursor: default; user-select: none; }
+button { font: inherit; color: inherit; }
+
+#bg {
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(164, 91, 255, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(57, 255, 176, 0.14), transparent 60%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-0));
+}
+#bg::after { /* faint scanline grid */
+  content: ''; position: absolute; inset: 0; opacity: 0.25;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 4px, 64px 100%;
+}
+#app { position: fixed; inset: 0; z-index: 1; }
+#overlay-layer { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
+#overlay-layer > * { pointer-events: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "overdrive-protocol",
+  "title": "Overdrive Protocol",
+  "subtitle": "Fast, intense EDM",
+  "artist": "RhythmEyez team (original composition)",
+  "bpm": 150,
+  "durationSec": 33.5,
+  "previewStart": 12.8,
+  "previewSec": 8,
+  "audio": "audio.wav",
+  "palette": {
+    "bg1": "#14030a",
+    "bg2": "#2c0718",
+    "lane": "#ff3864",
+    "accent": "#ffd23f",
+    "straight": "#ffd23f",
+    "curve": "#ff3864",
+    "glow": "#ff2e63"
+  },
+  "license": {
+    "name": "Original work of the RhythmEyez team",
+    "notes": "Composed and synthesized from code in tools/compose/ (no samples, no third-party audio). Free to use and redistribute with this project.",
+    "source": "tools/compose/songs/overdrive-protocol.mjs"
+  }
+}

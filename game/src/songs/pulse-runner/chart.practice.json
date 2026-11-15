@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "song": "pulse-runner",
+  "difficulty": "practice",
+  "generatedBy": "tools/compose (offline, from the composed note data)",
+  "notes": [
+    {"type":"straight","t":1.936,"lane":0},
+    {"type":"straight","t":2.903,"lane":2},
+    {"type":"straight","t":3.871,"lane":0},
+    {"type":"straight","t":4.839,"lane":2},
+    {"type":"straight","t":5.807,"lane":1},
+    {"type":"straight","t":6.774,"lane":2},
+    {"type":"straight","t":7.742,"lane":0},
+    {"type":"straight","t":8.71,"lane":2},
+    {"type":"straight","t":9.677,"lane":0},
+    {"type":"curve","t":11.613,"end":15.242,"path":[{"t":11.613,"x":0.343},{"t":12.097,"x":0.537},{"t":12.581,"x":0.709},{"t":13.548,"x":0.448},{"t":14.274,"x":0.552},{"t":14.516,"x":0.455},{"t":15.242,"x":0.291}]},
+    {"type":"straight","t":16.452,"lane":2},
+    {"type":"straight","t":17.419,"lane":0},
+    {"type":"straight","t":18.387,"lane":2},
+    {"type":"straight","t":19.355,"lane":0},
+    {"type":"straight","t":20.323,"lane":2},
+    {"type":"straight","t":21.29,"lane":1},
+    {"type":"curve","t":23.226,"end":26.976,"path":[{"t":23.226,"x":0.535},{"t":23.468,"x":0.632},{"t":24.194,"x":0.639},{"t":24.677,"x":0.535},{"t":25.161,"x":0.57},{"t":25.645,"x":0.535},{"t":26.129,"x":0.395},{"t":26.613,"x":0.291},{"t":26.976,"x":0.291}]},
+    {"type":"straight","t":28.065,"lane":3},
+    {"type":"straight","t":29.032,"lane":1},
+    {"type":"straight","t":30,"lane":2}
+  ]
+}
