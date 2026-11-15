@@ -25,6 +25,8 @@ export default function songs(root, app) {
   root.appendChild(el);
   el.appendChild(Object.assign(gazeButton('◀ Modes', () => app.go('modes'), { sound: 'back' }), { className: 'gbtn small purple top-left' }));
   el.appendChild(Object.assign(gazeButton('Character', () => app.go('characters', { back: 'songs' })), { className: 'gbtn small purple top-right' }));
+  // entry point to the Online Library (archive songs); the list above is unchanged
+  el.appendChild(Object.assign(gazeButton('🔍 Search', () => app.go('onlineSearch')), { className: 'gbtn small song-search-btn' }));
 
   const list = el.querySelector('.song-list'), cards = new Map();
   for (const song of SONGS) {

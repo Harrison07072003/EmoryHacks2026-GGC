@@ -108,87 +108,164 @@ docs/CHARTS.md            song and chart formats, adding songs
   `game/.env.local` with `VITE_SUPABASE_URL=…` and `VITE_SUPABASE_ANON_KEY=…`. Settings shows
   where results are going. Failed uploads wait locally and retry.
 
-## Online Library (archive music search) — in progress
+## Online Library (archive music search)
 
-Players will be able to search a large catalogue of openly licensed music and play any track
-as an automatically generated level. **Built-in songs are unchanged**; this is added on top.
-Status: step 2 of 5 done (search index + ingestion). The in-game UI, chart generator and server
-come next.
+Players can search a large catalogue of openly licensed music and play a track as an
+automatically generated level. **Built-in songs are unchanged**: the Online Library is added on
+top, behind a **🔍 Search** button on the song select screen.
+
+Status: steps 2–3 of 5 done (search index, ingestion, search screens, voice). Step 4 adds the
+level generator and the game server; until then, choosing a song shows a placeholder.
 
 ```
 archive.org (netlabels + FMA mirror)
-   │  tools/ingest.mjs  (admin key, throttled, resumable)
+   │  tools/ingest.mjs  (admin key, throttled, resumable, licence + explicit filters)
    ▼
-Typesense "songs" collection ◄── game client searches it with a SEARCH-ONLY scoped key   [step 3]
-   ▲
-   └── game/server: downloads audio, generates charts, writes bpm/difficulty/chart_status  [step 4]
+Typesense "songs" collection
+   ▲  search-only scoped key (filters is_explicit:false && is_commercial_ok:true built in)
+   │
+game client: Search → Say Genre / Keyboard → top 5 results → hover preview → Choose (2 s)
+   │  preview: HTTP Range request for the first 10 s, straight from archive.org (CORS ok)
+   ▼
+[step 4] game/server: first 30 s → chart generator → cache → play; writes bpm/difficulty back
 ```
 
-### Licensing rules (enforced at ingestion and in the search key)
+### Playing it
+
+1. Song select → **🔍 Search** (dwell 2 s, or click).
+2. **🎤 Say Genre**: say a genre ("ambient", "drum and bass"), "search <words>", "back",
+   "clear" or "stop listening". What is heard appears live in the search field.
+   **⌨ Keyboard**: a gaze keyboard (each key is a dwell button) that also takes a physical
+   keyboard (Enter searches, Escape goes back).
+3. The **top 5 songs by popularity** appear. Rest your eyes (or the mouse) on a song to hear
+   its first 10 seconds; look away to stop.
+4. Hold your gaze on a song's **Choose** area for 2 seconds (it fills up), or say
+   "choose 3" and then "yes".
+
+The mic button (top right, also **Alt+M**) turns voice on and off and shows when it is
+listening. Voice stops automatically outside the search screens, so it never listens during
+a song.
+
+**Voice needs Chrome or Edge and an internet connection** (Chrome sends speech to Google's
+recognition service). Firefox has no speech recognition: the voice buttons are disabled with
+a note, and the keyboard works as usual. A blocked microphone is reported the same way.
+
+### Content rules
 
 - **NoDerivatives (ND) tracks are always excluded.** CC 4.0 counts music synced to moving
   images as an adaptation, and a note highway synced to a song arguably is one.
-- **NonCommercial (NC) tracks are excluded** unless `ALLOW_NONCOMMERCIAL=true`. The client
-  search key also has `is_commercial_ok:true` built in, so NC tracks stay hidden even if some
-  were indexed earlier.
+- **NonCommercial (NC) tracks are excluded** unless `ALLOW_NONCOMMERCIAL=true`.
+- **Explicit songs never appear.** Ingestion checks titles, artist, album, tags and item
+  descriptions against [`src/config/content-blocklist.json`](src/config/content-blocklist.json)
+  (words, phrases, artists, ids) and does not index matches (and removes them if an earlier
+  run did). As backups, every search filters `is_explicit:false` and the listed ids, and the
+  client's scoped key has `is_explicit:false` built in. Run `npm run ingest -- --verbose` to
+  see every skipped track and why.
+- **Exclude one song by hand:** `npm run exclude-song -- <song id>` (ids look like
+  `ia_<identifier>_<key>` or `fma_…`; each result row has a `data-song-id` attribute in dev tools, and they are in the
+  Typesense documents). It adds the id to the blocklist and deletes the song from the index.
+  Commit the JSON change to share it.
 - Only `netlabels` (labels publishing their own catalogues) and the FMA mirror are ingested
   by default. `opensource_audio` / `audio_music` are open user uploads with unreliable license
   claims (commercial soundtracks marked "public domain" were found). Opt in with
   `--ia-collections` only after checking.
-- Every document carries `attribution` ("Title" by Artist · License · source link), which the
-  game shows wherever an archive song is shown or played.
+- Every song carries `attribution` ("Title" by Artist · License · source link); the game
+  shows artist and license on every result and in every confirmation.
 - Not legal advice: review the licenses before selling the game.
 
-### Free Music Archive
+FMA's public API is discontinued. Its catalogue is mirrored on archive.org in the
+`freemusicarchive` collection; `--source fma` reads it and tags tracks `source: fma`.
 
-FMA's public API is discontinued. FMA's catalogue is mirrored on archive.org in the
-`freemusicarchive` collection, with a link back to FMA on each item; `--source fma` reads that
-collection and tags tracks `source: fma`.
+### Run it locally
 
-### Set up Typesense and ingest
+Two ways to run Typesense:
+
+**A. Standalone (no Docker; used in the Coder workspace)**
 
 ```bash
 cd game
 cp .env.example .env              # set TYPESENSE_ADMIN_API_KEY to a long random string
-npm run typesense:up              # docker compose: typesense/typesense:30.2 on :8108, volume typesense-data
+npm run typesense                 # downloads Typesense 30.2 once, starts it on :8108; no-op if running
 npm run typesense:setup           # creates the songs collection + prints the search-only key
 #   copy the printed TYPESENSE_SEARCH_API_KEY / VITE_TYPESENSE_SEARCH_API_KEY lines into .env
-npm run ingest -- --limit 200     # index the 200 most-downloaded allowed tracks
+npm run ingest -- --limit 300     # index the most-downloaded allowed tracks
+npm run dev                       # the game; Vite proxies /typesense to Typesense
 ```
 
+The binary, log and pid live in `~/.local/share/rhythmeyez/typesense/`, the data in
+`~/.local/share/rhythmeyez/typesense/data` (outside the repo, so it survives restarts;
+override with `TYPESENSE_HOME` / `TYPESENSE_DATA_DIR`). After a workspace restart, run
+`npm run typesense` again; the index is still there. `npm run typesense:stop` stops it.
+
+**B. Docker (if your machine has Docker)**: `npm run typesense:up` instead of
+`npm run typesense` (image `typesense/typesense:30.2`, port 8108, named volume
+`typesense-data`). Everything else is the same.
+
 Ingestion options: `--source internet_archive|fma|all`, `--limit N`, `--collection NAME`,
-`--dry-run` (fetch and print, write nothing), `--restart` (forget progress),
+`--dry-run`, `--restart` (forget progress), `--verbose` (log skipped tracks),
 `--ia-collections a,b`, `--batch N`, `--rate MS` (gap between archive.org requests, default
-1000), `--min-sec / --max-sec` (accepted track length, default 30–600). `npm run ingest -- -h`
+1000), `--min-sec / --max-sec` (track length, default 30–600), `--scrape`. `npm run ingest -- -h`
 prints them.
 
 - **Resumable:** progress is saved in `game/.cache/ingest/` after every batch; run the same
-  command again to continue. Stopping with Ctrl+C is safe.
-- **Idempotent:** documents use stable ids (`ia_<identifier>_<filekey>` / `fma_…`) and are
-  imported with `action=emplace`. A plain `upsert` would replace whole documents and wipe the
-  `bpm`, `difficulty` and `chart_*` fields written by chart generation.
-- **Polite:** one request at a time, at least 1 s apart, retries with exponential backoff
-  (respecting `Retry-After`) on 429/5xx, and a descriptive User-Agent.
-- **Robust:** items with broken metadata, no MP3/OGG file, an unknown duration or a disallowed
-  license are skipped and counted in the summary. The archive.org Scrape API was seen returning
-  stale results for unrelated queries; the client detects this and falls back to
-  `advancedsearch.php` paging.
+  command again to continue.
+- **Idempotent:** stable ids, imported with `action=emplace`. A plain `upsert` would replace
+  whole documents and wipe the `bpm`, `difficulty` and `chart_*` fields written later.
+- **Polite:** one request at a time, at least 1 s apart, retries with backoff (respecting
+  `Retry-After`), a descriptive User-Agent.
+- **Paging:** archive.org's `advancedsearch.php`, most downloaded first. It stops at 10,000
+  items per query (archive.org's limit). The Scrape API has no limit, but in testing it
+  returned results for other queries and repeated pages, so it is opt-in (`--scrape`) and
+  validated; a page of already-seen items always ends the run instead of looping.
 
-Typesense Cloud: set `TYPESENSE_HOST` (e.g. `xxx.a1.typesense.net`), `TYPESENSE_PORT=443`,
-`TYPESENSE_PROTOCOL=https` and the cluster's admin key, then run the same commands except `typesense:up`.
+### Deployment (planned; nothing is deployed yet)
+
+| Part | Where | Needs |
+|---|---|---|
+| Game (static files) | GitHub Pages | build-time: `VITE_BASE_PATH=/<repo-name>/`, `VITE_TYPESENSE_URL=https://<cluster>.typesense.net`, `VITE_TYPESENSE_SEARCH_API_KEY=<scoped search key>`, `VITE_SERVER_URL=https://<server host>` |
+| Search | Typesense Cloud (or any Typesense) | run `typesense:setup` and `ingest` from a dev machine with `TYPESENSE_HOST/PORT=443/PROTOCOL=https/ADMIN_API_KEY` |
+| Game server (step 4) | Render / Railway / Fly.io | `TYPESENSE_*` incl. the admin key, `CORS_ORIGINS=https://<user>.github.io`, rate limits; never in the front end |
+
+- The front end contains **no secrets**: only the scoped search-only key and public URLs.
+  The build fails if a `VITE_` variable holds the admin key.
+- The game works from a subpath: all asset paths go through Vite's `base`
+  (`VITE_BASE_PATH`), including the face-tracking model.
+- Without `VITE_TYPESENSE_*` (or when the services are down), built-in songs play normally
+  and Search shows "Online search is unavailable right now".
+- Build: `cd game && VITE_BASE_PATH=/<repo>/ VITE_TYPESENSE_URL=… VITE_TYPESENSE_SEARCH_API_KEY=… npm run build`,
+  then publish `game/dist/`.
 
 ### Installed & Added
 
 | Kind | What | Notes |
 |---|---|---|
-| npm packages | none so far | the Typesense and archive.org clients use plain `fetch`, like `data/supabase.js` |
-| Service | Typesense 30.2 (`typesense/typesense:30.2`) | `docker-compose.yml`, port `8108` (`TYPESENSE_PORT`), data in the named Docker volume `typesense-data` |
-| API | Typesense | search engine holding the song metadata; the game only gets a search-only key |
-| API | Internet Archive Scrape / advancedsearch / Metadata | catalogue paging and per-item file lists |
-| Folder | `src/services/archive/` | licenses, metadata → document mapping, polite HTTP, IA client, ingestion loop |
+| npm packages | none | the Typesense and archive.org clients use plain `fetch`, like `data/supabase.js`; no lockfile changes |
+| Service | Typesense 30.2, standalone | `npm run typesense`; binary + data in `~/.local/share/rhythmeyez/typesense/` (port `TYPESENSE_PORT`, default 8108) |
+| Service (optional) | Typesense 30.2, Docker | `docker-compose.yml`, image `typesense/typesense:30.2`, named volume `typesense-data` |
+| API | Typesense | search engine holding the song metadata; the game only gets a scoped search-only key |
+| API | Internet Archive advancedsearch / Scrape / Metadata / download | catalogue paging, per-item file lists, Range downloads of the first seconds |
+| API | Web Speech API (`SpeechRecognition`) | voice search in Chrome/Edge (needs internet) |
+| Folder | `src/services/archive/` | licenses, content filter, metadata → documents, polite HTTP, IA client, ingestion loop |
 | Folder | `src/services/search/` | Typesense REST client, `songs` schema, search parameter builder |
-| Scripts | `tools/ingest.mjs`, `tools/typesense-setup.mjs`, `tools/env.mjs` | ingestion CLI, collection + key setup, `.env` loader |
-| npm scripts | `typesense:up`, `typesense:setup`, `ingest` | |
-| Config | `.env.example`, `docker-compose.yml` | `.cache/` added to `.gitignore` |
-| Env vars | `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_PROTOCOL`, `TYPESENSE_COLLECTION`, `TYPESENSE_ADMIN_API_KEY` (scripts/server only), `TYPESENSE_SEARCH_API_KEY`, `VITE_TYPESENSE_URL`, `VITE_TYPESENSE_SEARCH_API_KEY`, `ALLOW_NONCOMMERCIAL`, `INGEST_USER_AGENT` (optional) | |
-| Tests | `test/archive-licenses.test.js`, `test/archive-metadata.test.js`, `test/search-and-ingest.test.js` | |
+| Folder | `src/online/` | Online Library client: config, the one search path, partial audio download, voice session, shared UI |
+| Folder | `src/voice/` | speech recognizer wrapper (auto-restart, errors) and the command parser |
+| Screens | `src/screens/online-search.js`, `online-keyboard.js`, `online-results.js` | screens 2–4; `src/styles/online.css` |
+| Config | `src/config/content-blocklist.json` | explicit words/phrases/artists and hand-excluded ids |
+| Scripts | `tools/ingest.mjs`, `tools/typesense-setup.mjs`, `tools/exclude-song.mjs`, `tools/env.mjs`, `tools/blocklist.mjs`, `server/scripts/start-typesense.sh`, `server/scripts/stop-typesense.sh` | |
+| npm scripts | `typesense`, `typesense:stop`, `typesense:up` (Docker), `typesense:setup`, `ingest`, `exclude-song` | |
+| Config files | `.env.example`, `docker-compose.yml`; `.cache/` in `.gitignore` | |
+| Env vars (server/tools) | `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_PROTOCOL`, `TYPESENSE_COLLECTION`, `TYPESENSE_ADMIN_API_KEY`, `TYPESENSE_SEARCH_API_KEY`, `ALLOW_NONCOMMERCIAL`, `SERVER_PORT`, `INGEST_USER_AGENT` (optional), `TYPESENSE_HOME` / `TYPESENSE_DATA_DIR` (optional) | |
+| Env vars (browser, public) | `VITE_TYPESENSE_URL`, `VITE_TYPESENSE_SEARCH_API_KEY`, `VITE_TYPESENSE_COLLECTION` (optional), `VITE_SERVER_URL`, `VITE_BASE_PATH` | |
+| Existing files changed | `main.js` (3 screens registered), `screens/songs.js` (Search button), `index.html` (online.css), `vite.config.js` (`base`, dev proxies, admin-key guard), `package.json` (scripts) | built-in songs, charts and the rest of the flow are untouched |
+| Tests | `archive-licenses`, `archive-metadata`, `content-filter`, `search-and-ingest`, `voice-commands`, `online-ui` | |
+
+**Teammate setup**
+
+```bash
+cd game && npm install
+cp .env.example .env                       # set TYPESENSE_ADMIN_API_KEY
+npm run typesense                          # or: npm run typesense:up (Docker)
+npm run typesense:setup                    # paste the two printed key lines into .env
+npm run ingest -- --limit 300
+npm run dev
+```

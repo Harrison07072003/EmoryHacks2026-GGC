@@ -20,8 +20,11 @@ import results from './screens/results.js';
 import settingsScreen from './screens/settings.js';
 import startupError from './screens/startup-error.js';
 import faceCheck from './screens/face-check.js';
+import onlineSearch from './screens/online-search.js';
+import onlineKeyboard from './screens/online-keyboard.js';
+import onlineResults from './screens/online-results.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck };
+const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';

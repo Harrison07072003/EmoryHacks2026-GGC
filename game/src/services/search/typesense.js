@@ -51,6 +51,26 @@ export function createTypesenseClient({ url, apiKey }, fetchFn = globalThis.fetc
       return text.split('\n').filter(Boolean).map(line => JSON.parse(line));
     },
 
+    /**
+     * Add fields that exist in `schema` but not yet in the live collection (additive migration).
+     * Returns the names added.
+     */
+    async ensureSchemaFields(schema) {
+      const live = await call('GET', `/collections/${encodeURIComponent(schema.name)}`);
+      const have = new Set(live.fields.map(f => f.name));
+      const missing = schema.fields.filter(f => !have.has(f.name));
+      if (missing.length) await call('PATCH', `/collections/${encodeURIComponent(schema.name)}`, { body: { fields: missing } });
+      return missing.map(f => f.name);
+    },
+
+    /** Delete documents by id (missing ids are ignored). Returns the number deleted. */
+    async deleteDocuments(collection, ids) {
+      if (!ids.length) return 0;
+      const filter = `id:[${ids.map(id => `\`${id}\``).join(',')}]`;
+      const res = await call('DELETE', `/collections/${encodeURIComponent(collection)}/documents?filter_by=${encodeURIComponent(filter)}`);
+      return res.num_deleted ?? 0;
+    },
+
     updateDocument: (collection, id, fields) => call('PATCH', `/collections/${encodeURIComponent(collection)}/documents/${encodeURIComponent(id)}`, { body: fields }),
     getDocument: (collection, id) => call('GET', `/collections/${encodeURIComponent(collection)}/documents/${encodeURIComponent(id)}`),
 

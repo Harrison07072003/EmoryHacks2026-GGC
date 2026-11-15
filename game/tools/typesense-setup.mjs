@@ -3,9 +3,9 @@
 // prints the key to put in .env as TYPESENSE_SEARCH_API_KEY / VITE_TYPESENSE_SEARCH_API_KEY.
 // The admin key is only ever used here, in tools/ingest.mjs and in game/server.
 //
-// Unless ALLOW_NONCOMMERCIAL=true, the printed key is a *scoped* key with
-// `filter_by: is_commercial_ok:true` embedded, so the game can never see NC tracks even if
-// some were indexed earlier with the flag on.
+// The printed key is a *scoped* key with a filter embedded that Typesense applies to every
+// search: `is_explicit:false`, plus `is_commercial_ok:true` unless ALLOW_NONCOMMERCIAL=true.
+// So the game can never see explicit or NC tracks, whatever filter the client sends.
 import { createHmac } from 'node:crypto';
 import { envFlag, loadEnv } from './env.mjs';
 import { createTypesenseClient, typesenseConfig } from '../src/services/search/typesense.js';
@@ -24,11 +24,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ts = createTypesenseClient(cfg);
   await ts.health().catch(e => { console.error(`Typesense not reachable at ${cfg.url}: ${e.message}`); process.exit(1); });
   if (await ts.ensureCollection(songsSchema(cfg.collection))) console.log(`created collection "${cfg.collection}"`);
-  else console.log(`collection "${cfg.collection}" exists`);
+  else {
+    const added = await ts.ensureSchemaFields(songsSchema(cfg.collection));
+    console.log(`collection "${cfg.collection}" exists${added.length ? `; added fields: ${added.join(', ')}` : ''}`);
+  }
 
   const key = await ts.createKey({ description: `RhythmEyez game client: search ${cfg.collection} only`, actions: ['documents:search'], collections: [cfg.collection] });
-  const clientKey = envFlag(env.ALLOW_NONCOMMERCIAL, false) ? key.value : scopedSearchKey(key.value, { filter_by: 'is_commercial_ok:true' });
-  console.log(`\nSearch-only key (id ${key.id}). Put this in game/.env:\n`);
+  const filter = envFlag(env.ALLOW_NONCOMMERCIAL, false) ? 'is_explicit:false' : 'is_explicit:false && is_commercial_ok:true';
+  const clientKey = scopedSearchKey(key.value, { filter_by: filter });
+  console.log(`\nSearch-only key (id ${key.id}, scoped to "${filter}"). Put this in game/.env:\n`);
   console.log(`TYPESENSE_SEARCH_API_KEY=${clientKey}`);
   console.log(`VITE_TYPESENSE_SEARCH_API_KEY=${clientKey}`);
 }

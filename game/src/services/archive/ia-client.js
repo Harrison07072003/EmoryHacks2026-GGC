@@ -29,46 +29,60 @@ export function sourceQuery(source, collections = SOURCES[source].collections) {
 
 const ADV_PREFIX = 'adv:';
 const ROWS = 100;
+export const ADVANCED_MAX_RESULTS = 10000;   // archive.org's deep-paging limit for advancedsearch.php
 const asList = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
 
 /**
+ * Two ways to page through search results:
+ *  - advancedsearch.php (default): page numbers, sorted by downloads, reliable, but archive.org
+ *    stops at 10,000 results per query (HTTP 507 DEEP_PAGING) — the 10,000 most downloaded
+ *    items, far more than the game needs.
+ *  - Scrape API (opt-in, `useScrape`): cursor paging with no limit, but seen live returning
+ *    results for a different query and repeating the same page for every cursor. Each page is
+ *    validated; a bad page switches to advancedsearch.php.
+ *
  * @param http  createPoliteFetch() instance
- * @param log   progress/warning logger
+ * @param o     { log, useScrape }
  */
-export function createArchiveClient(http, { log = () => {} } = {}) {
+export function createArchiveClient(http, { log = () => {}, useScrape = false } = {}) {
+  let lastScrapeFirst = null;
+
   async function scrape(query, cursor, fields) {
-    // most downloaded first, so a --limit run gets the popular tracks
     const p = new URLSearchParams({ q: query, fields: fields.join(','), count: String(ROWS), sorts: 'downloads desc' });
     if (cursor) p.set('cursor', cursor);
     const res = await http.json(`${IA}/services/search/v1/scrape?${p}`);
     return { items: res.items ?? [], cursor: res.cursor ?? null, total: res.total ?? 0 };
   }
 
-  // advancedsearch.php: page-number paging; used when the Scrape API misbehaves
   async function advanced(query, page, fields) {
+    if ((page - 1) * ROWS >= ADVANCED_MAX_RESULTS) {
+      log(`  archive.org paging limit reached (${ADVANCED_MAX_RESULTS} items for one query); narrow it with --ia-collections for more`);
+      return { items: [], cursor: null, at: `${ADV_PREFIX}${page}`, total: 0, capped: true };
+    }
     const p = new URLSearchParams({ q: query, rows: String(ROWS), page: String(page), output: 'json' });
     fields.forEach(f => p.append('fl[]', f));
     p.append('sort[]', 'downloads desc');
     const res = await http.json(`${IA}/advancedsearch.php?${p}`);
     const items = res.response?.docs ?? [], total = res.response?.numFound ?? 0;
-    const next = items.length && page * ROWS < total ? `${ADV_PREFIX}${page + 1}` : null;
+    const next = items.length && page * ROWS < Math.min(total, ADVANCED_MAX_RESULTS) ? `${ADV_PREFIX}${page + 1}` : null;
     return { items, cursor: next, at: `${ADV_PREFIX}${page}`, total };
   }
 
   return {
     /**
-     * One page of search results. Pass the returned `cursor` to get the next page (null = done).
-     * `expectCollections`: when given, a Scrape page whose items are not in those collections
-     * is treated as a bad response (seen live: the endpoint returning a stale result for every
-     * query) and paging switches to advancedsearch.php.
-     * `at` (when present) is the cursor that re-fetches THIS page, for resuming mid-page.
+     * One page of search results, most downloaded first. Pass the returned `cursor` to get the
+     * next page (null = done). `at` is the cursor that re-fetches THIS page (resume mid-page).
+     * `expectCollections` lets a Scrape page be checked against the query.
      */
     async search(query, { cursor, expectCollections, fields = SCRAPE_FIELDS } = {}) {
-      if (cursor?.startsWith(ADV_PREFIX)) return advanced(query, Number(cursor.slice(ADV_PREFIX.length)), fields);
+      if (!useScrape || cursor?.startsWith(ADV_PREFIX)) return advanced(query, cursor ? Number(cursor.slice(ADV_PREFIX.length)) : 1, fields);
       const page = await scrape(query, cursor, fields);
+      const first = page.items[0]?.identifier ?? null;
       const wrong = expectCollections && page.items.find(i => !asList(i.collection).some(c => expectCollections.includes(c)));
-      if (!wrong) return page;
-      log(`  ! Scrape API returned items outside the query (${wrong.identifier}); switching to advancedsearch.php`);
+      const repeated = cursor && first !== null && first === lastScrapeFirst;
+      lastScrapeFirst = first;
+      if (!wrong && !repeated) return page;
+      log(`  ! Scrape API ${wrong ? `returned items outside the query (${wrong.identifier})` : 'repeated the previous page'}; switching to advancedsearch.php`);
       return advanced(query, 1, fields);
     },
     metadata: identifier => http.json(`${IA}/metadata/${encodeURIComponent(identifier)}`),

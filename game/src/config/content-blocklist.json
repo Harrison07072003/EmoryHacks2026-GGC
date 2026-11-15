@@ -1,0 +1,12 @@
+{
+  "_readme": "Explicit-content rules for archive songs. 'words': matched as whole words in title, artist, album, tags and description; a trailing * matches any ending (fuck* -> fucking). 'phrases': matched anywhere (case-insensitive). 'artists': exact artist names (case-insensitive). 'ids': Typesense song ids excluded by hand (npm run exclude-song -- <id>). Ingestion skips matches and removes them from the index; the game also filters these ids out of every search.",
+  "phrases": ["parental advisory", "explicit content", "explicit lyrics", "explicit version", "(explicit)", "[explicit]", "nsfw", "18+", "xxx"],
+  "words": [
+    "explicit", "fuck*", "motherfuck*", "shit*", "bullshit*", "bitch*", "cunt*", "nigga*", "nigger*", "fag", "faggot*", "whore*", "slut*",
+    "porn*", "pussy", "pussies", "cock", "cocks", "cocksuck*", "dick", "dicks", "dickhead*", "asshole*", "bastard*", "twat*", "wank*",
+    "jizz*", "cum", "cumshot*", "blowjob*", "handjob*", "dildo*", "orgasm*", "horny", "sex", "sexx*", "rape", "raping", "rapist*",
+    "kkk", "nazi*", "heil", "retard*"
+  ],
+  "artists": [],
+  "ids": []
+}

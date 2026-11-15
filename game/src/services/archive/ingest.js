@@ -15,16 +15,19 @@ const freshState = () => ({ cursor: null, offset: 0, items: 0, tracks: 0, done: 
  * @param o {
  *   archive, search (null in dry run), collection, sources: string[], limit (tracks, Infinity = all),
  *   batchSize, dryRun, mapOptions: { allowNonCommercial, minSec, maxSec }, collections (IA override),
- *   state: { load(source), save(source, st) }, log
+ *   state: { load(source), save(source, st) }, log, verbose (log every skipped track)
  * }
- * @returns {{ tracks, items, failed, skipped: Record<string, number>, sample: object[] }}
+ * @returns {{ tracks, items, failed, removed, skipped: Record<string, number>, sample: object[] }}
  */
-export async function runIngest({ archive, search, collection = 'songs', sources, limit = Infinity, batchSize = 100, dryRun = false, mapOptions = {}, collections, state, log = () => {} }) {
-  const report = { tracks: 0, items: 0, failed: 0, skipped: {}, sample: [] };
-  const skip = reason => { const key = reason.startsWith('duration') ? 'duration out of range' : reason; report.skipped[key] = (report.skipped[key] ?? 0) + 1; };
-  let buffer = [];
+export async function runIngest({ archive, search, collection = 'songs', sources, limit = Infinity, batchSize = 100, dryRun = false, mapOptions = {}, collections, state, log = () => {}, verbose = false }) {
+  const report = { tracks: 0, items: 0, failed: 0, removed: 0, skipped: {}, sample: [] };
+  const skip = reason => { const key = reason.startsWith('duration') ? 'duration out of range' : reason.startsWith('explicit') ? 'explicit' : reason; report.skipped[key] = (report.skipped[key] ?? 0) + 1; };
+  let buffer = [], excluded = [];
+  const seen = new Set();   // identifiers handled in this run: a page of only seen items means the API is looping
 
   async function flush() {
+    if (excluded.length && !dryRun) report.removed += await search.deleteDocuments(collection, excluded);
+    excluded = [];
     if (!buffer.length) return;
     if (dryRun) { report.sample.push(...buffer.slice(0, Math.max(0, 3 - report.sample.length))); }
     else {
@@ -51,6 +54,12 @@ export async function runIngest({ archive, search, collection = 'songs', sources
       const page = await archive.search(query, { cursor: st.cursor, expectCollections: cols });
       if (page.at) st.cursor = page.at;   // the page actually served (after a fallback) is the one to resume
       if (firstPage) log(`${source}: ${page.total} matching items`);
+      if (page.items.length && page.items.every(i => seen.has(i.identifier))) {
+        log(`${source}: ! the archive returned a page that was already processed; stopping this source to avoid a loop`);
+        await save(0);
+        break;
+      }
+      page.items.forEach(i => seen.add(i.identifier));
       for (let i = st.offset; i < page.items.length; i++) {
         if (report.tracks + buffer.length >= limit) { await flush(); await save(i); return report; }
         const item = page.items[i];
@@ -59,8 +68,9 @@ export async function runIngest({ archive, search, collection = 'songs', sources
         let meta;
         try { meta = await archive.metadata(item.identifier); }
         catch (e) { skip('metadata error'); log(`  - ${item.identifier}: ${e.message}`); continue; }
-        const { docs, skipped } = itemToDocuments(meta, { source, popularity: item.downloads, ...mapOptions });
-        skipped.forEach(s => skip(s.reason));
+        const { docs, skipped, excludedIds } = itemToDocuments(meta, { source, popularity: item.downloads, ...mapOptions });
+        skipped.forEach(s => { skip(s.reason); if (verbose) log(`  - skip ${item.identifier}/${s.name}: ${s.reason}`); });
+        excluded.push(...excludedIds);   // explicit now: remove from the index if an earlier run added it
         const room = limit - report.tracks - buffer.length;
         buffer.push(...docs.slice(0, room));
         // limit hit inside this item: stop here and resume AT this item next time (emplace is idempotent)

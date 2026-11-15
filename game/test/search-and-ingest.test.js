@@ -10,7 +10,7 @@ describe('search params', () => {
     const p = buildSearchParams({ q: 'lofi bea' });
     expect(p).toMatchObject({ q: 'lofi bea', query_by: 'title,artist,album,genre', prefix: true, num_typos: 2, facet_by: 'genre,source,difficulty', page: 1, per_page: 20 });
     expect(p.sort_by).toBe('_text_match:desc,popularity:desc');
-    expect(p.filter_by).toBeUndefined();
+    expect(p.filter_by).toBe('is_explicit:false');
   });
 
   it('empty query browses popular first', () => {
@@ -20,7 +20,8 @@ describe('search params', () => {
 
   it('builds quoted filters and sorts', () => {
     const p = buildSearchParams({ genres: ['drum & bass', 'lo-fi, chill'], difficulties: [2, 3], sort: 'bpm', page: 3, perPage: 500 });
-    expect(p.filter_by).toBe('genre:=[`drum & bass`,`lo-fi, chill`] && difficulty:=[2,3]');
+    expect(p.filter_by).toBe('is_explicit:false && genre:=[`drum & bass`,`lo-fi, chill`] && difficulty:=[2,3]');
+    expect(buildSearchParams({ excludeIds: ['ia_a_1', 'fma_b'] }).filter_by).toBe('is_explicit:false && id:!=[`ia_a_1`,`fma_b`]');
     expect(p.sort_by).toBe('bpm(missing_values: last):asc,popularity:desc');
     expect(p.page).toBe(3);
     expect(p.per_page).toBe(100);
@@ -64,27 +65,43 @@ describe('polite fetch', () => {
 });
 
 describe('archive client paging', () => {
-  const scrapePage = (cols, cursor) => ({ items: [{ identifier: 'x', collection: cols }], cursor, total: 300 });
-  const advPage = (n) => ({ response: { numFound: 250, docs: [{ identifier: `adv${n}`, collection: ['netlabels'] }] } });
-  const client = responder => { const urls = []; return { urls, c: createArchiveClient({ json: async u => { urls.push(u); return responder(u); } }) }; };
+  const scrapePage = (cols, cursor, first = 'x') => ({ items: [{ identifier: first, collection: cols }], cursor, total: 300 });
+  const advPage = n => ({ response: { numFound: 250, docs: [{ identifier: `adv${n}`, collection: ['netlabels'] }] } });
+  const client = (responder, opts) => { const urls = []; return { urls, c: createArchiveClient({ json: async u => { urls.push(u); return responder(u); } }, opts) }; };
+  const adv = u => advPage(u.match(/page=(\d+)/)[1]);
 
-  it('uses the Scrape API cursor when its results match the query', async () => {
-    const { c, urls } = client(() => scrapePage(['label', 'netlabels'], 'CUR'));
-    const page = await c.search('q', { expectCollections: ['netlabels'] });
-    expect(page.cursor).toBe('CUR');
-    expect(urls[0]).toContain('/services/search/v1/scrape?');
-    expect(urls[0]).toContain('sorts=downloads+desc');
+  it('pages with advancedsearch.php by default, most downloaded first', async () => {
+    const { c, urls } = client(adv);
+    const p1 = await c.search('q');
+    expect(urls[0]).toContain('/advancedsearch.php?');
+    expect(urls[0]).toContain('sort%5B%5D=downloads+desc');
+    expect(p1).toMatchObject({ cursor: 'adv:2', at: 'adv:1' });
+    expect((await c.search('q', { cursor: 'adv:3' })).cursor).toBeNull();   // 3 * 100 >= 250
   });
 
-  it('falls back to advancedsearch.php paging when Scrape returns unrelated items', async () => {
-    const { c, urls } = client(u => (u.includes('scrape') ? scrapePage(['freemusicarchive'], 'CUR') : advPage(u.match(/page=(\d+)/)[1])));
-    const p1 = await c.search('q', { expectCollections: ['netlabels'] });
-    expect(p1.items[0].identifier).toBe('adv1');
-    expect(p1.cursor).toBe('adv:2');
-    const p2 = await c.search('q', { cursor: p1.cursor });
-    expect(p2.items[0].identifier).toBe('adv2');
-    expect((await c.search('q', { cursor: 'adv:3' })).cursor).toBeNull();   // 3 * 100 >= 250
-    expect(urls.filter(u => u.includes('scrape'))).toHaveLength(1);
+  it('stops at the 10,000-result deep-paging limit without calling the API', async () => {
+    const { c, urls } = client(() => ({ response: { numFound: 50000, docs: [{ identifier: 'z' }] } }));
+    expect((await c.search('q', { cursor: 'adv:100' })).cursor).toBeNull();
+    const beyond = await c.search('q', { cursor: 'adv:101' });
+    expect(beyond).toMatchObject({ items: [], cursor: null, capped: true });
+    expect(urls).toHaveLength(1);
+  });
+
+  it('opt-in Scrape API: uses its cursor while results look right', async () => {
+    const { c, urls } = client(() => scrapePage(['label', 'netlabels'], 'CUR'), { useScrape: true });
+    expect((await c.search('q', { expectCollections: ['netlabels'] })).cursor).toBe('CUR');
+    expect(urls[0]).toContain('/services/search/v1/scrape?');
+  });
+
+  it('opt-in Scrape API: falls back when results are for another query', async () => {
+    const { c } = client(u => (u.includes('scrape') ? scrapePage(['freemusicarchive'], 'CUR') : adv(u)), { useScrape: true });
+    expect((await c.search('q', { expectCollections: ['netlabels'] })).items[0].identifier).toBe('adv1');
+  });
+
+  it('opt-in Scrape API: falls back when the next cursor repeats the same page', async () => {
+    const { c } = client(u => (u.includes('scrape') ? scrapePage(['netlabels'], 'SAME', 'NS050') : adv(u)), { useScrape: true });
+    expect((await c.search('q', { expectCollections: ['netlabels'] })).items[0].identifier).toBe('NS050');
+    expect((await c.search('q', { cursor: 'SAME', expectCollections: ['netlabels'] })).items[0].identifier).toBe('adv1');
   });
 });
 
@@ -147,6 +164,14 @@ describe('runIngest', () => {
     expect(fetched).toEqual(['a']);
   });
 
+  it('stops a source when the archive keeps returning pages it already processed', async () => {
+    const loop = { start: { items: [{ identifier: 'a' }], cursor: 'again' }, again: { items: [{ identifier: 'a' }], cursor: 'again' } };
+    const f = fakes({ pages: loop, items });
+    const r = await runIngest({ ...f, sources: ['internet_archive'] });
+    expect(r.tracks).toBe(2);
+    expect(f.imported).toHaveLength(2);
+  });
+
   it('dry run writes nothing and returns a sample', async () => {
     const f = fakes({ pages, items });
     const r = await runIngest({ ...f, search: null, sources: ['internet_archive'], dryRun: true, limit: 4 });
@@ -154,5 +179,36 @@ describe('runIngest', () => {
     expect(r.sample).toHaveLength(3);
     expect(f.imported).toHaveLength(0);
     expect(f.saved).toEqual({});
+  });
+});
+
+describe('result diversity', async () => {
+  const { diversify } = await import('../src/online/search-client.js');
+  const s = (id, itemId) => ({ id, itemId });
+  it('keeps popularity order but at most one song per release, filling with repeats only if needed', () => {
+    const ranked = [s('a1', 'A'), s('a2', 'A'), s('b1', 'B'), s('a3', 'A'), s('c1', 'C'), s('d1', 'D'), s('e1', 'E'), s('f1', 'F')];
+    expect(diversify(ranked).map(x => x.id)).toEqual(['a1', 'b1', 'c1', 'd1', 'e1']);
+    expect(diversify([s('a1', 'A'), s('a2', 'A'), s('b1', 'B')]).map(x => x.id)).toEqual(['a1', 'b1', 'a2']);
+  });
+});
+
+describe('online config and the unavailable path', async () => {
+  const { onlineConfig } = await import('../src/online/config.js');
+  const { createOnlineSearch, SearchUnavailable } = await import('../src/online/search-client.js');
+
+  it('dev defaults to the Vite proxy under the base path; production needs explicit URLs', () => {
+    expect(onlineConfig({ DEV: true, BASE_URL: '/', VITE_TYPESENSE_SEARCH_API_KEY: 'k' })).toMatchObject({ typesenseUrl: '/typesense', serverUrl: '/api', searchEnabled: true });
+    expect(onlineConfig({ DEV: true, BASE_URL: '/repo/', VITE_TYPESENSE_SEARCH_API_KEY: 'k' }).typesenseUrl).toBe('/repo/typesense');
+    expect(onlineConfig({ DEV: false, BASE_URL: '/repo/', VITE_TYPESENSE_SEARCH_API_KEY: 'k' })).toMatchObject({ typesenseUrl: '', serverUrl: '', searchEnabled: false });
+    expect(onlineConfig({ DEV: false, VITE_TYPESENSE_URL: 'https://x.typesense.net/', VITE_TYPESENSE_SEARCH_API_KEY: 'k', VITE_SERVER_URL: 'https://api.example/' }))
+      .toMatchObject({ typesenseUrl: 'https://x.typesense.net', serverUrl: 'https://api.example', searchEnabled: true });
+    expect(onlineConfig({ DEV: true }).searchEnabled).toBe(false);   // no key: unavailable, game still works
+  });
+
+  it('search reports "unavailable" when not configured or when Typesense is down', async () => {
+    await expect(createOnlineSearch(onlineConfig({ DEV: false })).search({ q: 'x' })).rejects.toBeInstanceOf(SearchUnavailable);
+    const down = createOnlineSearch(onlineConfig({ DEV: true, BASE_URL: '/', VITE_TYPESENSE_SEARCH_API_KEY: 'k' }), async () => { throw new TypeError('fetch failed'); });
+    await expect(down.search({ q: 'x' })).rejects.toBeInstanceOf(SearchUnavailable);
+    expect(await down.genres()).toEqual([]);
   });
 });

@@ -19,6 +19,10 @@ export function songsSchema(name = 'songs') {
       { name: 'license_url', type: 'string', facet: true },
       { name: 'license_name', type: 'string', index: false, optional: true },
       { name: 'is_commercial_ok', type: 'bool', facet: true },
+      // always false in the index (explicit tracks are not ingested); every search filters on it as a
+      // backup. Optional so older documents can be migrated: a missing value never matches the filter.
+      { name: 'is_explicit', type: 'bool', facet: true, optional: true },
+      { name: 'bitrate_kbps', type: 'int32', index: false, optional: true },
       { name: 'attribution', type: 'string', index: false, optional: true },
       { name: 'item_url', type: 'string', index: false, optional: true },
       { name: 'duration', type: 'int32', sort: true },

@@ -17,10 +17,15 @@ export const SORTS = {
 const quote = v => `\`${String(v).replace(/`/g, '')}\``;
 
 /**
- * @param o { q, genres: string[], difficulties: number[], sources: string[], sort, page, perPage, seed }
+ * @param o { q, genres: string[], difficulties: number[], sources: string[], sort, page, perPage, seed,
+ *            excludeIds: string[] (hand-excluded songs) }
+ *
+ * `is_explicit:false` is ALWAYS applied (a backup: explicit tracks are not ingested, and the
+ * client's scoped key filters them too).
  */
-export function buildSearchParams({ q = '', genres = [], difficulties = [], sources = [], sort = 'relevance', page = 1, perPage = 20, seed = 0 } = {}) {
-  const filters = [];
+export function buildSearchParams({ q = '', genres = [], difficulties = [], sources = [], sort = 'relevance', page = 1, perPage = 20, seed = 0, excludeIds = [] } = {}) {
+  const filters = ['is_explicit:false'];
+  if (excludeIds.length) filters.push(`id:!=[${excludeIds.map(quote).join(',')}]`);
   if (genres.length) filters.push(`genre:=[${genres.map(quote).join(',')}]`);
   if (difficulties.length) filters.push(`difficulty:=[${difficulties.map(d => Math.round(d)).join(',')}]`);
   if (sources.length) filters.push(`source:=[${sources.map(quote).join(',')}]`);
@@ -33,7 +38,7 @@ export function buildSearchParams({ q = '', genres = [], difficulties = [], sour
     num_typos: 2,
     typo_tokens_threshold: 1,
     drop_tokens_threshold: 1,
-    filter_by: filters.join(' && ') || undefined,
+    filter_by: filters.join(' && '),
     facet_by: FACET_BY,
     max_facet_values: 30,
     // relevance with an empty query has nothing to match: show popular first instead

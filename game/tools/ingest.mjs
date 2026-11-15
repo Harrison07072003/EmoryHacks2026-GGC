@@ -12,6 +12,11 @@
 //   --batch N          documents per import call (default 100)
 //   --rate MS          minimum ms between archive.org requests (default 1000)
 //   --min-sec / --max-sec   accepted track length (default 30..600)
+//   --verbose          log every skipped track with the reason
+//   --scrape           page with archive.org's Scrape API instead of advancedsearch.php (no 10,000-item
+//                      limit, but unreliable when tested; bad pages fall back automatically)
+//
+// Explicit tracks (src/config/content-blocklist.json) are skipped and removed from the index.
 import { parseArgs } from 'node:util';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { GAME_DIR, envFlag, loadEnv } from './env.mjs';
@@ -20,6 +25,7 @@ import { createArchiveClient, SOURCES } from '../src/services/archive/ia-client.
 import { runIngest } from '../src/services/archive/ingest.js';
 import { createTypesenseClient, typesenseConfig } from '../src/services/search/typesense.js';
 import { songsSchema } from '../src/services/search/schema.js';
+import { loadBlocklist } from './blocklist.mjs';
 
 const env = loadEnv();
 const { values: o } = parseArgs({
@@ -34,6 +40,8 @@ const { values: o } = parseArgs({
     rate: { type: 'string', default: '1000' },
     'min-sec': { type: 'string', default: '30' },
     'max-sec': { type: 'string', default: '600' },
+    verbose: { type: 'boolean', short: 'v', default: false },
+    scrape: { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -61,20 +69,21 @@ const search = cfg ? createTypesenseClient(cfg) : null;
 if (!o['dry-run']) {
   await search.health().catch(e => { console.error(`Typesense not reachable at ${cfg.url}: ${e.message}`); process.exit(1); });
   if (await search.ensureCollection(songsSchema(collection))) console.log(`created collection "${collection}"`);
+  else { const added = await search.ensureSchemaFields(songsSchema(collection)); if (added.length) console.log(`added fields: ${added.join(', ')}`); }
 }
 
 console.log(`${o['dry-run'] ? 'DRY RUN · ' : ''}collection ${collection} · NonCommercial ${allowNonCommercial ? 'allowed' : 'excluded'} · NoDerivatives excluded`);
 const started = Date.now();
 const report = await runIngest({
-  archive: createArchiveClient(http, { log: console.log }), search, collection, sources, state,
+  archive: createArchiveClient(http, { log: console.log, useScrape: o.scrape }), search, collection, sources, state,
   limit: o.limit ? Number(o.limit) : Infinity,
   batchSize: Number(o.batch), dryRun: o['dry-run'],
   collections: o['ia-collections']?.split(',').map(s => s.trim()).filter(Boolean),
-  mapOptions: { allowNonCommercial, minSec: Number(o['min-sec']), maxSec: Number(o['max-sec']) },
-  log: console.log,
+  mapOptions: { allowNonCommercial, minSec: Number(o['min-sec']), maxSec: Number(o['max-sec']), blocklist: await loadBlocklist() },
+  log: console.log, verbose: o.verbose,
 });
 
 if (o['dry-run']) for (const d of report.sample) console.log(JSON.stringify(d, null, 2));
-console.log(`\n${report.tracks} tracks from ${report.items} items in ${Math.round((Date.now() - started) / 1000)}s${report.failed ? `, ${report.failed} failed imports` : ''}`);
+console.log(`\n${report.tracks} tracks from ${report.items} items in ${Math.round((Date.now() - started) / 1000)}s${report.failed ? `, ${report.failed} failed imports` : ''}${report.removed ? `, ${report.removed} explicit tracks removed from the index` : ''}`);
 if (Object.keys(report.skipped).length) console.log('skipped:', Object.entries(report.skipped).map(([k, v]) => `${k} ×${v}`).join(', '));
 process.exit(report.failed ? 1 : 0);

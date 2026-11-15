@@ -1,6 +1,9 @@
 // Internet Archive item metadata (https://archive.org/metadata/{identifier}) -> one Typesense
 // document per playable TRACK. Pure functions; the network lives in ia-client.js.
 import { attributionText, isCommercialOk, isLicenseAllowed, parseLicense } from './licenses.js';
+import { checkExplicit, compileBlocklist } from './content-filter.js';
+
+const NO_BLOCKLIST = compileBlocklist();
 
 // Playable formats in order of preference. Derivatives are fine (IA makes MP3/OGG from FLAC).
 const FORMAT_RANK = [
@@ -73,22 +76,24 @@ const titleFromName = name => stripTrackNo(name.replace(/\.[^.]+$/, '').replace(
 /**
  * Map one archive.org metadata response to Typesense documents.
  * @param meta    the JSON from /metadata/{identifier}
- * @param opts    { source: 'internet_archive'|'fma', allowNonCommercial, minSec, maxSec, popularity }
- * @returns {{ docs: object[], skipped: { name: string, reason: string }[] }}
+ * @param opts    { source: 'internet_archive'|'fma', allowNonCommercial, minSec, maxSec, popularity,
+ *                  blocklist: compileBlocklist() result }
+ * @returns {{ docs: object[], skipped: { name: string, reason: string }[], excludedIds: string[] }}
+ *          excludedIds = tracks dropped as explicit, so a re-run can remove them from the index
  */
-export function itemToDocuments(meta, { source = 'internet_archive', allowNonCommercial = false, minSec = 30, maxSec = 600, popularity } = {}) {
+export function itemToDocuments(meta, { source = 'internet_archive', allowNonCommercial = false, minSec = 30, maxSec = 600, popularity, blocklist = NO_BLOCKLIST } = {}) {
   const m = meta?.metadata ?? {}, identifier = one(m.identifier);
   const skipped = [];
-  if (!identifier) return { docs: [], skipped: [{ name: '?', reason: 'no identifier' }] };
+  if (!identifier) return { docs: [], skipped: [{ name: '?', reason: 'no identifier' }], excludedIds: [] };
   const license = parseLicense(one(m.licenseurl));
   if (!isLicenseAllowed(license, { allowNonCommercial })) {
-    return { docs: [], skipped: [{ name: identifier, reason: `license ${license.ok ? license.name : one(m.licenseurl) || 'missing'}` }] };
+    return { docs: [], skipped: [{ name: identifier, reason: `license ${license.ok ? license.name : one(m.licenseurl) || 'missing'}` }], excludedIds: [] };
   }
   const itemArtist = tidy(one(m.creator)), itemAlbum = tidy(one(m.title));
   const itemUrl = `https://archive.org/details/${identifier}`;
   const fmaUrl = source === 'fma' ? tidy(one(m.source)) : '';
   const prefix = source === 'fma' ? 'fma' : 'ia';
-  const docs = [];
+  const docs = [], excludedIds = [];
 
   for (const file of pickAudioFiles(meta.files)) {
     const duration = parseLength(file.length);
@@ -97,22 +102,29 @@ export function itemToDocuments(meta, { source = 'internet_archive', allowNonCom
     const title = stripTrackNo(one(file.title)) || titleFromName(file.name);
     const artist = tidy(one(file.creator) ?? one(file.artist)) || itemArtist || 'Unknown artist';
     const album = tidy(one(file.album)) || itemAlbum;
+    const id = `${prefix}_${identifier}_${fileKey(file.name)}`.replace(/[^\w.-]/g, '_');
+    const genre = cleanGenres({ fileGenre: file.genre, subjects: m.subject, artist, collections: m.collection });
+    const explicit = checkExplicit({ id, title, artist, album, tags: [...genre, ...list(m.subject), ...list(file.genre)], description: [one(m.description), itemAlbum].join(' ') }, blocklist);
+    if (explicit.explicit) { skipped.push({ name: file.name, reason: `explicit (${explicit.reason})` }); excludedIds.push(id); continue; }
+    const seconds = Number(one(file.length)) || duration, size = Number(one(file.size)) || 0;
     docs.push({
-      id: `${prefix}_${identifier}_${fileKey(file.name)}`.replace(/[^\w.-]/g, '_'),
-      title, artist, album,
-      genre: cleanGenres({ fileGenre: file.genre, subjects: m.subject, artist, collections: m.collection }),
+      id,
+      title, artist, album, genre,
       source,
       source_id: `${identifier}/${file.name}`,
       license_url: license.url,
       license_name: license.name,
       is_commercial_ok: isCommercialOk(license),
+      is_explicit: false,
       attribution: attributionText({ title, artist, licenseName: license.name, sourceUrl: fmaUrl || itemUrl }),
       item_url: itemUrl,
       duration,
       popularity: Math.max(0, Math.round(Number(popularity ?? one(m.downloads)) || 0)),
+      // used to download only the first seconds (preview / 30 s level) with an HTTP Range request
+      bitrate_kbps: size && seconds ? Math.round((size * 8) / 1000 / seconds) : 0,
       audio_url: `https://archive.org/download/${encodeURIComponent(identifier)}/${file.name.split('/').map(encodeURIComponent).join('/')}`,
     });
   }
   if (!docs.length && !skipped.length) skipped.push({ name: identifier, reason: 'no mp3/ogg files' });
-  return { docs, skipped };
+  return { docs, skipped, excludedIds };
 }
