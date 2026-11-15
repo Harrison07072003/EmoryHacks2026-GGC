@@ -107,3 +107,88 @@ docs/CHARTS.md            song and chart formats, adding songs
 - **Remote database (optional):** run `db/schema.sql` in Supabase, then create
   `game/.env.local` with `VITE_SUPABASE_URL=…` and `VITE_SUPABASE_ANON_KEY=…`. Settings shows
   where results are going. Failed uploads wait locally and retry.
+
+## Online Library (archive music search) — in progress
+
+Players will be able to search a large catalogue of openly licensed music and play any track
+as an automatically generated level. **Built-in songs are unchanged**; this is added on top.
+Status: step 2 of 5 done (search index + ingestion). The in-game UI, chart generator and server
+come next.
+
+```
+archive.org (netlabels + FMA mirror)
+   │  tools/ingest.mjs  (admin key, throttled, resumable)
+   ▼
+Typesense "songs" collection ◄── game client searches it with a SEARCH-ONLY scoped key   [step 3]
+   ▲
+   └── game/server: downloads audio, generates charts, writes bpm/difficulty/chart_status  [step 4]
+```
+
+### Licensing rules (enforced at ingestion and in the search key)
+
+- **NoDerivatives (ND) tracks are always excluded.** CC 4.0 counts music synced to moving
+  images as an adaptation, and a note highway synced to a song arguably is one.
+- **NonCommercial (NC) tracks are excluded** unless `ALLOW_NONCOMMERCIAL=true`. The client
+  search key also has `is_commercial_ok:true` built in, so NC tracks stay hidden even if some
+  were indexed earlier.
+- Only `netlabels` (labels publishing their own catalogues) and the FMA mirror are ingested
+  by default. `opensource_audio` / `audio_music` are open user uploads with unreliable license
+  claims (commercial soundtracks marked "public domain" were found). Opt in with
+  `--ia-collections` only after checking.
+- Every document carries `attribution` ("Title" by Artist · License · source link), which the
+  game shows wherever an archive song is shown or played.
+- Not legal advice: review the licenses before selling the game.
+
+### Free Music Archive
+
+FMA's public API is discontinued. FMA's catalogue is mirrored on archive.org in the
+`freemusicarchive` collection, with a link back to FMA on each item; `--source fma` reads that
+collection and tags tracks `source: fma`.
+
+### Set up Typesense and ingest
+
+```bash
+cd game
+cp .env.example .env              # set TYPESENSE_ADMIN_API_KEY to a long random string
+npm run typesense:up              # docker compose: typesense/typesense:30.2 on :8108, volume typesense-data
+npm run typesense:setup           # creates the songs collection + prints the search-only key
+#   copy the printed TYPESENSE_SEARCH_API_KEY / VITE_TYPESENSE_SEARCH_API_KEY lines into .env
+npm run ingest -- --limit 200     # index the 200 most-downloaded allowed tracks
+```
+
+Ingestion options: `--source internet_archive|fma|all`, `--limit N`, `--collection NAME`,
+`--dry-run` (fetch and print, write nothing), `--restart` (forget progress),
+`--ia-collections a,b`, `--batch N`, `--rate MS` (gap between archive.org requests, default
+1000), `--min-sec / --max-sec` (accepted track length, default 30–600). `npm run ingest -- -h`
+prints them.
+
+- **Resumable:** progress is saved in `game/.cache/ingest/` after every batch; run the same
+  command again to continue. Stopping with Ctrl+C is safe.
+- **Idempotent:** documents use stable ids (`ia_<identifier>_<filekey>` / `fma_…`) and are
+  imported with `action=emplace`. A plain `upsert` would replace whole documents and wipe the
+  `bpm`, `difficulty` and `chart_*` fields written by chart generation.
+- **Polite:** one request at a time, at least 1 s apart, retries with exponential backoff
+  (respecting `Retry-After`) on 429/5xx, and a descriptive User-Agent.
+- **Robust:** items with broken metadata, no MP3/OGG file, an unknown duration or a disallowed
+  license are skipped and counted in the summary. The archive.org Scrape API was seen returning
+  stale results for unrelated queries; the client detects this and falls back to
+  `advancedsearch.php` paging.
+
+Typesense Cloud: set `TYPESENSE_HOST` (e.g. `xxx.a1.typesense.net`), `TYPESENSE_PORT=443`,
+`TYPESENSE_PROTOCOL=https` and the cluster's admin key, then run the same commands except `typesense:up`.
+
+### Installed & Added
+
+| Kind | What | Notes |
+|---|---|---|
+| npm packages | none so far | the Typesense and archive.org clients use plain `fetch`, like `data/supabase.js` |
+| Service | Typesense 30.2 (`typesense/typesense:30.2`) | `docker-compose.yml`, port `8108` (`TYPESENSE_PORT`), data in the named Docker volume `typesense-data` |
+| API | Typesense | search engine holding the song metadata; the game only gets a search-only key |
+| API | Internet Archive Scrape / advancedsearch / Metadata | catalogue paging and per-item file lists |
+| Folder | `src/services/archive/` | licenses, metadata → document mapping, polite HTTP, IA client, ingestion loop |
+| Folder | `src/services/search/` | Typesense REST client, `songs` schema, search parameter builder |
+| Scripts | `tools/ingest.mjs`, `tools/typesense-setup.mjs`, `tools/env.mjs` | ingestion CLI, collection + key setup, `.env` loader |
+| npm scripts | `typesense:up`, `typesense:setup`, `ingest` | |
+| Config | `.env.example`, `docker-compose.yml` | `.cache/` added to `.gitignore` |
+| Env vars | `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_PROTOCOL`, `TYPESENSE_COLLECTION`, `TYPESENSE_ADMIN_API_KEY` (scripts/server only), `TYPESENSE_SEARCH_API_KEY`, `VITE_TYPESENSE_URL`, `VITE_TYPESENSE_SEARCH_API_KEY`, `ALLOW_NONCOMMERCIAL`, `INGEST_USER_AGENT` (optional) | |
+| Tests | `test/archive-licenses.test.js`, `test/archive-metadata.test.js`, `test/search-and-ingest.test.js` | |

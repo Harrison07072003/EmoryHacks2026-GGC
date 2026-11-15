@@ -12,7 +12,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "songs": "node tools/compose/build-songs.mjs",
-    "check-charts": "node tools/check-charts.mjs"
+    "check-charts": "node tools/check-charts.mjs",
+    "typesense:up": "docker compose up -d typesense",
+    "typesense:setup": "node tools/typesense-setup.mjs",
+    "ingest": "node tools/ingest.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3"
