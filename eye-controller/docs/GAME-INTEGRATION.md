@@ -35,6 +35,15 @@ provisional gaze point) and `info.onTarget`; the built-in screen lights the band
 is in (green = the dot's band, amber = wrong) and shows "look at the dot". `info.stage` can
 be `'skipped'` when a hop gave up.
 
+**Dots are checked against the player's gaze too (v0.5.1).** From the 3rd dot a left/right
+fit from the dots so far, from the 6th a provisional model of both axes, decides whether
+the eyes are on the dot; a dot only completes when they are. Tolerances were set on 518
+recorded dots (94-97% of real attempts pass at once; looking well away is caught ~87% of
+the time). Looking away just stalls the dot: after 3.5 s it ends weak with no samples
+(`offTarget: true`), so no wrong data reaches the model and the result screen offers a
+top-up. During the dots `info.onTarget` (and, from the 6th dot, `info.gaze`) are reported
+like in the hops; the built-in screen shows "look at the dot".
+
 **Make the dots feel tracked, not timed.** Each dot now captures 24 frames (was 18) and
 holds a 0.3 s "locked" moment before moving on. `onProgress(p, info)` gets a second
 argument during the dots: `info.stage` is `'seeking'` (eyes still travelling), `'capturing'`

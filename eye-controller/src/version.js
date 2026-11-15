@@ -3,7 +3,7 @@
 import { FEATURE_VERSION } from './cv/features.js';
 
 export const VERSIONS = {
-  app: '0.5.0',          // 0.3 band hops + learning on hits; 0.4 face view and screens; 0.5 gaze-checked hops
+  app: '0.5.1',          // 0.4 face view and screens; 0.5 gaze-checked hops; 0.5.1 gaze-checked dots
   features: FEATURE_VERSION,
   mediapipeRuntime: '1.2.3',
   mediapipeModel: 'face_landmarker/float16/1',

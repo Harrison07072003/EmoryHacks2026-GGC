@@ -1,7 +1,8 @@
 // Default calibration screen, used when startCalibration() gets no onTarget of its own.
 // Shows the game's lane grid and a glowing dot that visibly tracks the player's eyes:
 // a spinning dashed ring while the eyes travel to it, then a reticle that tightens as the
-// eyes steady (and loosens, with a "hold steady" hint, when they wobble) while the ring
+// eyes steady and are on the dot (and loosens, with a "hold steady" or "look at the dot" hint,
+// when they wobble or look elsewhere) while the ring
 // fills, then a green lock with a burst. Also a comet trail while following, the three
 // phases, and a live mini face view so the player sees at once if tracking drops. During the
 // band hops, the band the tracker thinks you look at lights up (green = right band). Escape cancels.
@@ -66,7 +67,7 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
       if (phase !== st.phase) st.phaseDone[st.phase] = true;
       const jumped = !st.target || phase !== 'pursuit';
       Object.assign(st, { target, index, total, phase });
-      if (jumped) Object.assign(st, { progress: 0, ring: 0, stage: 'seeking', steady: 0, stageSince: performance.now() });
+      if (jumped) Object.assign(st, { progress: 0, ring: 0, stage: 'seeking', steady: 0, stageSince: performance.now(), onTarget: undefined });
     },
     progress(p, info) {
       if (info?.stage && info.stage !== st.stage) { st.stage = info.stage; st.stageSince = performance.now(); }
@@ -131,8 +132,9 @@ function drawDot(g, x, y, s, st, now) {
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 6 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
     g.strokeStyle = locked ? COLORS.ok : COLORS.ring; g.lineCap = 'round';
     g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, locked ? 1 : st.ring)); g.stroke(); g.lineCap = 'butt';
-    if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
-    if (st.phase === 'hops' && !locked && st.stage === 'capturing' && st.onTarget === false && now - st.onTargetSince > 600) text(g, 'look at the dot', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
+    const lookingAway = !locked && st.stage === 'capturing' && st.onTarget === false && now - st.onTargetSince > 600;
+    if (lookingAway) text(g, 'look at the dot', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
+    else if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
   }
   g.fillStyle = COLORS.dot; g.beginPath(); g.arc(x, y, r * 0.5 * pop, 0, 7); g.fill();
   g.fillStyle = locked ? COLORS.ok : COLORS.core; g.beginPath(); g.arc(x, y, r * 0.16 * pop, 0, 7); g.fill();
