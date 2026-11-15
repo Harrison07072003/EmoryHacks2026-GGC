@@ -241,3 +241,33 @@ describe('online config and the unavailable path', async () => {
     expect(await down.genres()).toEqual([]);
   });
 });
+
+describe('top 5 = different releases', async () => {
+  const { createOnlineSearch } = await import('../src/online/search-client.js');
+  const cfg = { typesenseUrl: 'https://ts', searchKey: 'k', collection: 'songs', searchEnabled: true };
+  const d = (id, item) => ({ id, item_id: item, source_id: `${item}/x.mp3`, title: id, artist: 'a', audio_url: 'https://archive.org/download/x/y.mp3' });
+  const reply = body => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+
+  it('groups by item: 5 releases come straight from Typesense', async () => {
+    const urls = [];
+    const s = createOnlineSearch(cfg, async url => { urls.push(url); return reply({ found: 7, grouped_hits: ['A', 'B', 'C', 'D', 'E'].map(i => ({ hits: [{ document: d(`${i}1`, i) }] })) }); });
+    const r = await s.search({ q: 'x' });
+    expect(r.songs.map(x => x.id)).toEqual(['A1', 'B1', 'C1', 'D1', 'E1']);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('group_by=item_id');
+  });
+
+  it('fills up with more songs when fewer than 5 releases match', async () => {
+    const s = createOnlineSearch(cfg, async url => (url.includes('group_by')
+      ? reply({ found: 2, grouped_hits: [{ hits: [{ document: d('A1', 'A') }] }, { hits: [{ document: d('B1', 'B') }] }] })
+      : reply({ found: 6, hits: ['A1', 'A2', 'A3', 'B1', 'B2', 'A4'].map(id => ({ document: d(id, id[0]) })) })));
+    expect((await s.search({ q: 'x' })).songs.map(x => x.id)).toEqual(['A1', 'B1', 'A2', 'A3', 'B2']);
+  });
+
+  it('still works on an index without item_id (falls back to plain search)', async () => {
+    const s = createOnlineSearch(cfg, async url => (url.includes('group_by')
+      ? { ok: false, status: 404, text: async () => JSON.stringify({ message: 'Could not find a field named `item_id` in the schema.' }) }
+      : reply({ found: 2, hits: [{ document: d('A1', 'A') }, { document: d('B1', 'B') }] })));
+    expect((await s.search({ q: 'x' })).songs.map(x => x.id)).toEqual(['A1', 'B1']);
+  });
+});

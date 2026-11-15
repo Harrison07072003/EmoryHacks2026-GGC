@@ -16,6 +16,8 @@ export function songsSchema(name = 'songs') {
       { name: 'genre', type: 'string[]', facet: true, optional: true },
       { name: 'source', type: 'string', facet: true },
       { name: 'source_id', type: 'string', index: false, optional: true },
+      // the archive item (album) a track belongs to: searches group by it so results are different releases
+      { name: 'item_id', type: 'string', facet: true, optional: true },
       { name: 'license_url', type: 'string', facet: true },
       { name: 'license_name', type: 'string', index: false, optional: true },
       { name: 'is_commercial_ok', type: 'bool', facet: true },

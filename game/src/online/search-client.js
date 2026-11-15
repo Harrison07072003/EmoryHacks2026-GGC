@@ -3,12 +3,13 @@
 // backup to the scoped search key and to ingestion.
 import { createTypesenseClient } from '../services/search/typesense.js';
 import { buildSearchParams } from '../services/search/query.js';
-import blocklist from '../config/content-blocklist.json';
+import blocklist from '../config/content-blocklist.json' with { type: 'json' };
 import { GENERATOR_VERSION } from '../services/chartgen/generate.js';
 
 export const RESULT_COUNT = 5;
-// Popularity is the archive ITEM's download count, so every track of a popular album ties.
-// Fetch more candidates and keep at most one song per item, so the 5 are different releases.
+// Popularity is the archive ITEM's download count, so every track of a popular album ties and a
+// big album can fill the whole top 30. Typesense groups by item (one song per release); if fewer
+// than 5 releases match, the rest is filled with more songs from them.
 const CANDIDATES = 30;
 
 /** Top `n` songs, in order, preferring distinct items; repeats only fill remaining places. */
@@ -25,7 +26,7 @@ export class SearchUnavailable extends Error {}
 export function toSong(doc) {
   return {
     id: doc.id,
-    itemId: String(doc.source_id ?? doc.id).split('/')[0],
+    itemId: doc.item_id ?? String(doc.source_id ?? doc.id).split('/')[0],
     title: doc.title,
     artist: doc.artist,
     album: doc.album ?? '',
@@ -67,10 +68,17 @@ export function createOnlineSearch(config, fetchFn = (...a) => globalThis.fetch(
      * @returns {{ songs: object[], found: number, query: { q, genre } }}
      */
     async search({ q = '', genre = null } = {}) {
-      const params = buildSearchParams({ q, genres: genre ? [genre] : [], sort: 'popularity', perPage: CANDIDATES, excludeIds });
-      const res = await run(params);
-      const all = (res.hits ?? []).map(h => toSong(h.document)).filter(s => s.audioUrl && !excludeIds.includes(s.id));
-      return { songs: diversify(all), found: res.found ?? all.length, query: { q, genre } };
+      const base = { q, genres: genre ? [genre] : [], sort: 'popularity', excludeIds };
+      const usable = docs => docs.map(toSong).filter(s => s.audioUrl && !excludeIds.includes(s.id));
+      let grouped = [];
+      try {
+        const g = await run({ ...buildSearchParams({ ...base, perPage: RESULT_COUNT }), group_by: 'item_id', group_limit: 1 });
+        grouped = usable((g.grouped_hits ?? []).flatMap(x => x.hits.map(h => h.document)));
+        if (grouped.length >= RESULT_COUNT) return { songs: grouped.slice(0, RESULT_COUNT), found: g.found ?? grouped.length, query: { q, genre } };
+      } catch (e) { if (!(e instanceof SearchUnavailable) || !/item_id|group/i.test(e.message)) throw e; }   // index without item_id yet
+      const res = await run(buildSearchParams({ ...base, perPage: CANDIDATES }));
+      const all = usable((res.hits ?? []).map(h => h.document));
+      return { songs: diversify([...grouped, ...all.filter(s => !grouped.some(x => x.id === s.id))]), found: res.found ?? all.length, query: { q, genre } };
     },
 
     /** Known genre values (most common first), for matching spoken genres. Cached; [] on failure. */

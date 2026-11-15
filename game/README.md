@@ -141,7 +141,8 @@ game/server (admin key): Typesense lookup + checks → audio cache → decode �
    "clear" or "stop listening". What is heard appears live in the search field.
    **⌨ Keyboard**: a gaze keyboard (each key is a dwell button) that also takes a physical
    keyboard (Enter searches, Escape goes back).
-3. The **top 5 songs by popularity** appear. Rest your eyes (or the mouse) on a song to hear
+3. The **top 5 songs by popularity** appear, each from a different release (album) when
+   possible. Rest your eyes (or the mouse) on a song to hear
    its first 10 seconds; look away to stop.
 4. Hold your gaze on a song's **Choose** area for 2 seconds (it fills up), or say
    "choose 3" and then "yes".
@@ -322,6 +323,15 @@ rules, re-run with `--restart` so indexed tracks are checked again.
   returned results for other queries and repeated pages, so it is opt-in (`--scrape`) and
   validated; a page of already-seen items always ends the run instead of looping.
 
+### Troubleshooting
+
+- **Blank page or "Eye tracking could not start" mentioning `.vite/deps` / "Outdated Optimize
+  Dep":** Vite's dependency cache changed under a running dev server. Stop `npm run dev` and
+  start it again. Run only one dev server per checkout (they share `node_modules/.vite`).
+  MediaPipe is now pre-bundled at start (`optimizeDeps.include`), which avoids the usual cause.
+- **Search says "unavailable":** `npm run typesense` (and check the two search-key lines in `.env`).
+- **"Downloading" never finishes / levels made "on this device":** `npm run server` is not running.
+
 ### Deployment (planned; nothing is deployed yet)
 
 | Part | Where | Needs |
@@ -364,7 +374,7 @@ rules, re-run with `--restart` so indexed tracks are checked again.
 | Config | `src/config/content-blocklist.json` | explicit words/phrases/artists and hand-excluded ids |
 | Config | `src/config/music-filter.json` | what counts as a song: non-music tags and the audio thresholds |
 | Files | `src/services/chartgen/musicality.js` | the song check (pulse contrast, hit rate, activity; non-music tags) |
-| Typesense fields | `is_song` (bool, facet), `rhythm_score` (float, sortable) | added by `typesense:setup` / ingestion to existing collections |
+| Typesense fields | `is_song` (bool, facet), `rhythm_score` (float, sortable), `item_id` (string, facet: one result per release) | added by `typesense:setup` (which also backfills `item_id`) / ingestion |
 | Scripts | `tools/ingest.mjs`, `tools/typesense-setup.mjs`, `tools/exclude-song.mjs`, `tools/env.mjs`, `tools/blocklist.mjs`, `server/scripts/start-typesense.sh`, `server/scripts/stop-typesense.sh` | |
 | npm scripts | `typesense`, `typesense:stop`, `typesense:up` (Docker), `typesense:setup`, `ingest` (now with `--pregenerate N`), `exclude-song`, `server`, `server:install`, `test:online` | |
 | Config files | `.env.example`, `docker-compose.yml`; `.cache/` in `.gitignore` | |

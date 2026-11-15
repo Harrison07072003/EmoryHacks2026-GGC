@@ -122,6 +122,7 @@ export function itemToDocuments(meta, { source = 'internet_archive', allowNonCom
       title, artist, album, genre,
       source,
       source_id: `${identifier}/${file.name}`,
+      item_id: `${prefix}_${identifier}`,
       license_url: license.url,
       license_name: license.name,
       is_commercial_ok: isCommercialOk(license),

@@ -27,6 +27,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else {
     const added = await ts.ensureSchemaFields(songsSchema(cfg.collection));
     console.log(`collection "${cfg.collection}" exists${added.length ? `; added fields: ${added.join(', ')}` : ''}`);
+    await backfillItemIds(ts, cfg);
   }
 
   const key = await ts.createKey({ description: `RhythmEyez game client: search ${cfg.collection} only`, actions: ['documents:search'], collections: [cfg.collection] });
@@ -35,4 +36,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`\nSearch-only key (id ${key.id}, scoped to "${filter}"). Put this in game/.env:\n`);
   console.log(`TYPESENSE_SEARCH_API_KEY=${clientKey}`);
   console.log(`VITE_TYPESENSE_SEARCH_API_KEY=${clientKey}`);
+}
+
+/** Older documents have no item_id (used to show one song per release): derive it from source_id. */
+async function backfillItemIds(ts, cfg) {
+  const res = await fetch(`${cfg.url}/collections/${cfg.collection}/documents/export?include_fields=id,source,source_id,item_id`, { headers: { 'X-TYPESENSE-API-KEY': cfg.apiKey } });
+  const docs = (await res.text()).split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(d => !d.item_id && d.source_id);
+  if (!docs.length) return;
+  const updates = docs.map(d => ({ id: d.id, item_id: `${d.source === 'fma' ? 'fma' : 'ia'}_${d.source_id.split('/')[0]}` }));
+  const results = await ts.importDocuments(cfg.collection, updates, 'update');
+  console.log(`added item_id to ${results.filter(r => r.success).length} existing document(s)`);
 }

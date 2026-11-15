@@ -50,6 +50,7 @@ function stubBrowser() {
     if (u.includes('/documents/search')) {
       const p = new URL(u, 'http://x').searchParams;
       if (p.get('per_page') === '0') return json({ found: 9, hits: [], facet_counts: [{ field_name: 'genre', counts: [{ value: 'electronic' }, { value: 'ambient' }, { value: 'rock' }] }] });
+      if (p.get('group_by') === 'item_id') return json({ found: 9, grouped_hits: Array.from({ length: Number(p.get('per_page')) }, (_, i) => ({ group_key: [`item${i + 1}`], hits: [{ document: doc(i + 1) }] })) });
       return json({ found: 9, hits: Array.from({ length: Number(p.get('per_page')) }, (_, i) => ({ document: doc(i + 1) })) });
     }
     return json({});
@@ -113,7 +114,8 @@ describe('Online Library flow', () => {
     await until(() => $$('.os-song').length === 5);
     const p = lastSearch();
     expect(p.get('q')).toBe('lofi');
-    expect(p.get('per_page')).toBe('30');   // candidates; the screen shows 5 distinct releases
+    expect(p.get('per_page')).toBe('5');
+    expect(p.get('group_by')).toBe('item_id');   // one song per release
     expect(p.get('sort_by')).toBe('popularity:desc');
     expect(p.get('filter_by')).toContain('is_explicit:false');
     expect(requests.at(-1).headers['X-TYPESENSE-API-KEY']).toBe('scoped-search-key');

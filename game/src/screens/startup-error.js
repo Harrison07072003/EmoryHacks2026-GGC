@@ -8,7 +8,8 @@ export default function startupError(root, app, { error }) {
   const hint = /permission|denied|notallowed/i.test(message) ? 'Allow the camera in the browser address bar, then reload.'
     : /secure|localhost|https/i.test(message) ? 'Open the game from http://localhost (or https), not a network IP.'
       : /notfound|device/i.test(message) ? 'No camera was found. Plug one in, close other apps using it, then reload.'
-        : /wasm|mediapipe|model|fetch/i.test(message) ? 'The face tracking files are missing: run `npm install` and `npm run fetch-model` in eye-controller/.'
+        : /\.vite\/deps|Outdated Optimize Dep|dynamically imported module/i.test(message) ? 'The dev server was rebuilding its files. Reload the page; if it happens again, stop and restart `npm run dev`.'
+        : /wasm|mediapipe|model|fetch/i.test(message) ?'The face tracking files are missing: run `npm install` and `npm run fetch-model` in eye-controller/.'
           : 'Check the browser console for details.';
   const el = html(`
     <section class="screen">

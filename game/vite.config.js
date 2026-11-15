@@ -35,6 +35,10 @@ export default defineConfig(({ mode }) => {
     },
     preview: { port: 5190, strictPort: true },
     resolve: { dedupe: ['@mediapipe/tasks-vision'] },
+    // The eye engine loads MediaPipe with a dynamic import from ../eye-controller, which Vite's
+    // dependency scan does not see. Without this, Vite discovers it on the first webcam start,
+    // re-optimizes, and that request fails with "504 Outdated Optimize Dep" (startup error screen).
+    optimizeDeps: { include: ['@mediapipe/tasks-vision'] },
     test: { environment: 'node', include: ['test/**/*.test.js'] },
   };
 });
