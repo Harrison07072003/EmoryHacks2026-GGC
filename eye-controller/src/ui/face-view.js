@@ -45,7 +45,7 @@ export function createFaceView(eyes, canvas, options = {}) {
     g.beginPath(); g.ellipse(fit.x + fit.w / 2, fit.y + fit.h / 2, fit.w * 0.16, fit.h * 0.36, 0, 0, 7); g.stroke(); g.setLineDash([]);
 
     if (fr?.face) {
-      if (data.landmarks && data.mesh && opt.mesh) drawMesh(g, data, P, s, opt.mesh, now);
+      if (data.landmarks && data.mesh && opt.mesh) drawMesh(g, data, P, s, opt.mesh);
       else stylisedFace(g, fr, P, s);
       drawBox(g, fr, P, s, ok, eyes.state.quality);
       if (data.landmarks) drawHeadDirection(g, fr, data.landmarks, P, s);
@@ -73,29 +73,31 @@ function line(g, L, P, pairs) {
   g.stroke();
 }
 
-function drawMesh(g, { landmarks: L, mesh }, P, s, mode, now) {
-  if (mode === 'full') { g.strokeStyle = 'rgba(77,225,255,0.13)'; g.lineWidth = 1 * s; line(g, L, P, mesh.tesselation); }
-  const pulse = 0.55 + 0.25 * Math.sin(now / 300);
-  g.lineWidth = 1.5 * s;
-  g.strokeStyle = `rgba(77,225,255,${pulse})`; line(g, L, P, mesh.oval);
-  g.strokeStyle = 'rgba(232,236,255,0.55)'; line(g, L, P, [...mesh.brows, ...mesh.lips]);
-  g.strokeStyle = C.warn; line(g, L, P, mesh.eyes);
-  g.strokeStyle = C.info; g.lineWidth = 2 * s; line(g, L, P, mesh.irises);
+// Restrained on purpose: thin lines, one accent colour, the lips barely there. The eyes and
+// irises are what the tracker uses, so they stay the clearest.
+function drawMesh(g, { landmarks: L, mesh }, P, s, mode) {
+  if (mode === 'full') { g.strokeStyle = 'rgba(77,225,255,0.07)'; g.lineWidth = 0.75 * s; line(g, L, P, mesh.tesselation); }
+  g.lineWidth = 1 * s;
+  g.strokeStyle = 'rgba(77,225,255,0.4)'; line(g, L, P, mesh.oval);
+  g.strokeStyle = 'rgba(232,236,255,0.22)'; line(g, L, P, mesh.brows);
+  g.strokeStyle = 'rgba(232,236,255,0.1)'; line(g, L, P, mesh.lips);
+  g.strokeStyle = 'rgba(232,236,255,0.65)'; line(g, L, P, mesh.eyes);
+  g.strokeStyle = C.info; g.lineWidth = 1.5 * s; line(g, L, P, mesh.irises);
 }
 
 /** No landmarks (mock): an outline from the face box, eyes where they usually are. */
 function stylisedFace(g, fr, P, s) {
   const b = fr.box, [x0, y0] = P(b.x + b.w, b.y), [x1, y1] = P(b.x, b.y + b.h), w = x1 - x0, h = y1 - y0;
-  g.strokeStyle = 'rgba(77,225,255,0.6)'; g.lineWidth = 1.5 * s;
+  g.strokeStyle = 'rgba(77,225,255,0.4)'; g.lineWidth = 1 * s;
   g.beginPath(); g.ellipse(x0 + w / 2, y0 + h / 2, w * 0.42, h * 0.48, 0, 0, 7); g.stroke();
-  g.strokeStyle = C.warn;
+  g.strokeStyle = 'rgba(232,236,255,0.65)';
   for (const ex of [0.32, 0.68]) { g.beginPath(); g.ellipse(x0 + w * ex, y0 + h * 0.42, w * 0.1, h * 0.04, 0, 0, 7); g.stroke(); }
 }
 
 /** HUD-style corner brackets around the face with the live quality score. */
 function drawBox(g, fr, P, s, ok, quality) {
   const b = fr.box, [x0, y0] = P(b.x + b.w, b.y), [x1, y1] = P(b.x, b.y + b.h), k = Math.min(x1 - x0, y1 - y0) * 0.18;
-  g.strokeStyle = ok ? C.ok : C.info; g.lineWidth = 3 * s;
+  g.strokeStyle = ok ? C.ok : C.info; g.lineWidth = 2 * s;
   g.beginPath();
   for (const [x, y, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
     g.moveTo(x, y + dy * k); g.lineTo(x, y); g.lineTo(x + dx * k, y);
@@ -109,11 +111,11 @@ function drawBox(g, fr, P, s, ok, quality) {
 
 /** Arrow from the nose in the direction the head points. */
 function drawHeadDirection(g, fr, L, P, s) {
-  const [yaw, pitch] = fr.head, [nx, ny] = P(L[1].x, L[1].y), len = 260 * s;
+  const [yaw, pitch] = fr.head, [nx, ny] = P(L[1].x, L[1].y), len = 180 * s;
   const tx = nx + Math.sin(yaw) * len * 0.5, ty = ny - Math.sin(pitch) * len * 0.5; // sign checked on the mirrored view
-  g.strokeStyle = 'rgba(255,211,77,0.85)'; g.lineWidth = 2.5 * s;
+  g.strokeStyle = 'rgba(255,211,77,0.55)'; g.lineWidth = 1.5 * s;
   g.beginPath(); g.moveTo(nx, ny); g.lineTo(tx, ty); g.stroke();
-  g.fillStyle = C.warn; g.beginPath(); g.arc(tx, ty, 4 * s, 0, 7); g.fill();
+  g.fillStyle = 'rgba(255,211,77,0.8)'; g.beginPath(); g.arc(tx, ty, 3 * s, 0, 7); g.fill();
 }
 
 /** Both eye crops, enlarged, with our pupil (red) and MediaPipe's iris (cyan). */
