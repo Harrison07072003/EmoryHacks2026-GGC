@@ -42,7 +42,7 @@ export class CameraSource {
     this.video.srcObject = this.stream;
     this.video.muted = true; this.video.playsInline = true;
     await this.video.play();
-    this.landmarker = await createLandmarker(this.options);
+    ({ landmarker: this.landmarker, mesh: this.mesh } = await createLandmarker(this.options));
 
     this.work = canvas(2, 2); this.workCtx = this.work.getContext('2d', { willReadFrequently: true });
     this.meter = canvas(48, 48); this.meterCtx = this.meter.getContext('2d', { willReadFrequently: true });
@@ -93,12 +93,14 @@ export class CameraSource {
     const raw = result.faceLandmarks[0];
     if (!raw) {
       if (this.settings.autoCenter) { this.follower.reset(); this.roi = { x: 0, y: 0, w: 1, h: 1 }; } // look at the whole frame again
+      this.landmarks = null;
       if (this.frameCount++ % METER_EVERY === 0) this.measure({ x: 0, y: 0, w: 1, h: 1 }, vw, vh);
       return this.onFrame?.({ t, face: false, ms: performance.now() - t });
     }
 
     // landmarks come back relative to the crop; put them in full-frame coordinates
     const L = raw.map(p => ({ x: roi.x + p.x * roi.w, y: roi.y + p.y * roi.h }));
+    this.landmarks = L; // for the face view (not part of the frame: 478 points is too much to record)
     const box = boundingBox(L);
     const R = this.eye(L, 'R', vw, vh), Le = this.eye(L, 'L', vw, vh);
     const head = headFeatures(L, result.facialTransformationMatrixes?.[0]?.data);

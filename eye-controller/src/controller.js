@@ -73,8 +73,8 @@ export function buildController(source, options = {}) {
      *          targets - your own [{x, y}] list
      *          area    - element the dots are drawn over (default: the whole page)
      *          onTarget(target | null, index, total, info), onProgress(0-1) - draw the dots yourself;
-     *                    info.moving is true during the moving-dot phase (called every frame),
-     *                    info.hop during the band hops
+     *                    info.phase is 'dots', 'pursuit' (info.moving, called every frame) or
+     *                    'hops' (info.hop; index / total then count the hops)
      */
     startCalibration(opts = {}) {
       if (!running) return Promise.reject(new Error('Eye tracking is not running: await init() first'));
@@ -89,12 +89,13 @@ export function buildController(source, options = {}) {
       const hops = playLike ? hopTargets(opts.hops ?? DEFAULT_HOPS, layout) : [];
       const ui = opts.onTarget
         ? { show: opts.onTarget, progress: opts.onProgress ?? (() => {}), destroy() {} }
-        : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort()) : { show() {}, progress() {}, destroy() {} };
+        : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort(), { eyes: api, layout }) : { show() {}, progress() {}, destroy() {} };
 
       return new Promise(resolve => {
         session = engine.session = new CalibrationSession({
           targets, pursuitMs, hops, ...opts.capture,
-          onTarget: (target, index, info) => { ui.show(target, index, targets.length, info); source.lookAt?.(target); },
+          // during the hops, index / total count the hops ("3 / 8"), not the dots
+          onTarget: (target, index, info) => { ui.show(target, index, info?.hop ? hops.length : targets.length, info); source.lookAt?.(target); },
           onProgress: p => ui.progress(p),
           onDone: (points, info) => {
             session = engine.session = null;
@@ -107,6 +108,9 @@ export function buildController(source, options = {}) {
         }).start();
       });
     },
+
+    /** Cancel a running calibration; its promise resolves with { aborted: true }. */
+    cancelCalibration() { session?.abort(); },
 
     stop() {
       session?.abort();
@@ -154,6 +158,19 @@ export function buildController(source, options = {}) {
      * ready, target, targetId, targetSource }. This is what data collection listens to.
      */
     onSample: cb => emitter.on('sample', cb),
+    /**
+     * Everything needed to draw the player's face: the latest frame (face box, head pose, eye
+     * measurements), and on the live camera also the <video>, the 478 face landmarks (0-1 of
+     * the camera frame), MediaPipe's mesh lines, the eye close-up images and where our pupil
+     * finder and MediaPipe's iris landed in them. Fields the source lacks are null (mock).
+     */
+    faceData() {
+      const cam = source.debug ? source : null;
+      return {
+        frame: engine.lastFrame, video: cam?.video ?? null, landmarks: cam?.landmarks ?? null, mesh: cam?.mesh ?? null,
+        eyeImages: cam?.eyeCanvas ?? null, eyeMarks: cam ? { L: cam.debug.L, R: cam.debug.R } : null,
+      };
+    },
     /** Full result of every calibration: { score, ok, weakCells, points }. */
     onCalibrationResult: cb => emitter.on('calibrationResult', cb),
     /**

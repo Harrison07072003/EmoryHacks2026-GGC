@@ -49,7 +49,7 @@ export class CalibrationSession {
   next() {
     this.index++;
     this.shownAt = null; this.buf = []; this.best = null;
-    if (this.index < this.targets.length) return this.onTarget?.(this.target, this.index);
+    if (this.index < this.targets.length) return this.onTarget?.(this.target, this.index, { phase: 'dots' });
     this.nextPhase();
   }
 
@@ -57,12 +57,12 @@ export class CalibrationSession {
     if (this.phase === 'dots' && this.pursuitMs > 0) {
       this.phase = 'pursuit';
       this.pursuit = { t0: null, now: pursuitPath(0, this.pursuitMs), samples: [], targets: [], trail: [] };
-      return this.onTarget?.(this.pursuit.now, this.index, { moving: true });
+      return this.onTarget?.(this.pursuit.now, this.index, { moving: true, phase: 'pursuit' });
     }
     if ((this.phase === 'dots' || this.phase === 'pursuit') && this.hops.length) {
       this.phase = 'hops';
       this.hop = { i: 0, t0: null, samples: [] };
-      return this.onTarget?.(this.target, this.index, { hop: true });
+      return this.onTarget?.(this.target, 0, { hop: true, phase: 'hops' });
     }
     this.done = true;
     this.onTarget?.(null, this.index);
@@ -110,7 +110,7 @@ export class CalibrationSession {
       return this.nextPhase();
     }
     p.now = pursuitPath(ms, this.pursuitMs);
-    this.onTarget?.(p.now, this.index, { moving: true });
+    this.onTarget?.(p.now, this.index, { moving: true, phase: 'pursuit' });
   }
 
   pushHop(frame) {
@@ -123,7 +123,7 @@ export class CalibrationSession {
     if (h.samples.length) this.points.push({ kind: 'hop', target, samples: h.samples, targets: h.samples.map(() => target), steadiness: 1, weak: false });
     if (h.i + 1 >= this.hops.length) return this.nextPhase();
     this.hop = { i: h.i + 1, t0: null, samples: [] };
-    this.onTarget?.(this.target, this.index, { hop: true });
+    this.onTarget?.(this.target, this.hop.i, { hop: true, phase: 'hops' });
   }
 
   finish(capture) {

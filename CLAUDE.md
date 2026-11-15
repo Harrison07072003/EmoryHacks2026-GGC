@@ -55,5 +55,11 @@ and `src/smoothing/gaze-smoother.js` are first estimates and are expected to mov
   lifted jumps 78% -> 82% and switches 62% -> 65% on target.
 - A one-dot re-anchor was tested offline and not built: the vertical error is a scale error
   (top band reads low, bottom is fine), so a single offset fixes one band and breaks the other.
+- v0.4 (2026-11-15): face view (`src/ui/face-view.js`), face check, calibration overlay with
+  phases and mini face view, score reveal, `positionChecks` tuned on clips, `faceData()` and
+  `cancelCalibration()`. Live camera rendering of the mesh / eye close-ups not yet seen on a real webcam.
+  Notes for the game team: `eye-controller/docs/GAME-INTEGRATION.md`.
+- The `rhythmeyez-game` branch is the game team's (a Coder commit-attribution workaround):
+  read it for intent, never write to it. All our work goes on `main`.
 - Firestore adapter for the pooled baseline and profiles is not built.
 - TypeScript is optional and not started.

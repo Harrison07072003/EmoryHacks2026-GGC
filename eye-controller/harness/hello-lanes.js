@@ -1,6 +1,6 @@
 // HELLO LANES: the smallest possible "game" on top of the eye-controller.
 // Copy this pattern: create -> init -> read `eyes.state` every frame -> subscribe to events.
-import { createEyeController, createMockEyeController } from '../src/index.js';
+import { createEyeController, createMockEyeController, runFaceCheck, showCalibrationResult } from '../src/index.js';
 
 // ---- the one line to switch between simulated eyes and the live webcam ----
 const live = new URLSearchParams(location.search).has('live');
@@ -45,18 +45,27 @@ function draw() {
 }
 
 // ---- lifecycle ----
+// face check -> calibration -> result screen; the result screen can ask for a redo or top-up
 async function calibrate(topUp) {
   try {
-    const result = await eyes.startCalibration({ topUp });
-    if (result.ok) await eyes.saveProfile();
+    if (!topUp) await runFaceCheck(eyes);
+    for (;;) {
+      const result = await eyes.startCalibration({ topUp });
+      if (result.aborted) return;
+      const choice = await showCalibrationResult(result, { layout: eyes.layout });
+      if (choice === 'continue') { if (result.ok) await eyes.saveProfile(); return; }
+      topUp = choice === 'topup';
+    }
   } catch (e) { say(e.message); }
 }
 document.getElementById('calibrate').onclick = () => calibrate(false);
 document.getElementById('topup').onclick = () => calibrate(true);
+document.getElementById('facecheck').onclick = () => runFaceCheck(eyes);
 const cond = { faceLost: false, light: 'good' };
 addEventListener('keydown', e => {
   if (e.key === 'c') calibrate(false);
   if (e.key === 't') calibrate(true);
+  if (e.key === 'v') runFaceCheck(eyes);
   if (e.key === 'f' && eyes.mock) eyes.mock.setConditions({ faceLost: (cond.faceLost = !cond.faceLost) });
   if (e.key === 'b' && eyes.mock) eyes.mock.setConditions({ light: (cond.light = cond.light === 'bad' ? 'good' : 'bad') });
 });

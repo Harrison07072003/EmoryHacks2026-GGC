@@ -22,6 +22,20 @@ export async function createLandmarker({ wasmPath, modelUrl } = {}) {
     baseOptions: { modelAssetPath: model, delegate },
     runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
   });
-  try { return await FaceLandmarker.createFromOptions(fileset, options('GPU')); }
-  catch { return FaceLandmarker.createFromOptions(fileset, options('CPU')); }
+  let landmarker;
+  try { landmarker = await FaceLandmarker.createFromOptions(fileset, options('GPU')); }
+  catch { landmarker = await FaceLandmarker.createFromOptions(fileset, options('CPU')); }
+  return { landmarker, mesh: meshOf(FaceLandmarker) };
+}
+
+/** Landmark index pairs for drawing the face (lines between points), from MediaPipe itself. */
+function meshOf(F) {
+  const pairs = list => (list ?? []).map(c => [c.start, c.end]);
+  return {
+    tesselation: pairs(F.FACE_LANDMARKS_TESSELATION), oval: pairs(F.FACE_LANDMARKS_FACE_OVAL),
+    eyes: [...pairs(F.FACE_LANDMARKS_LEFT_EYE), ...pairs(F.FACE_LANDMARKS_RIGHT_EYE)],
+    brows: [...pairs(F.FACE_LANDMARKS_LEFT_EYEBROW), ...pairs(F.FACE_LANDMARKS_RIGHT_EYEBROW)],
+    irises: [...pairs(F.FACE_LANDMARKS_LEFT_IRIS), ...pairs(F.FACE_LANDMARKS_RIGHT_IRIS)],
+    lips: pairs(F.FACE_LANDMARKS_LIPS),
+  };
 }

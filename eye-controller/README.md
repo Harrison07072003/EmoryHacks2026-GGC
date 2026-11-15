@@ -89,7 +89,8 @@ Lanes split `x` into 4 equal columns; `y < 0.5` is the `top` band. Timestamps `t
 | `await saveProfile(id?)` | save the current calibration and add it to the pooled baseline |
 | `await exportBaseline()` / `await importBaseline(data)` | move the pooled baseline between machines |
 
-Extras outside the frozen contract: `eyes.setTarget({ x, y }, id)` (tell the tracker where
+Extras outside the frozen contract: `eyes.faceData()` (camera image, face mesh, eye close-ups,
+latest frame: for drawing the player's face), `eyes.cancelCalibration()`, `eyes.setTarget({ x, y }, id)` (tell the tracker where
 the player should be looking, so collected data can be scored), `eyes.onSample(cb)` (one
 object per frame with measurements, gaze and target; see `docs/database-brief.md`),
 `eyes.confirmOnTarget({ x, y })` (online refinement: call
@@ -138,7 +139,7 @@ On real clips this lifted lane jumps from 78% to 82% on target and band switches
 to 65%. Hello Lanes does not do it; the debug page's test run does.
 Otherwise a built-in full-screen overlay is used; Escape cancels it.
 
-**Keys in Hello Lanes:** `C` calibrate, `T` top-up weak cells, and on the mock `F` hide the
+**Keys in Hello Lanes:** `C` face check → calibrate → result screen, `V` face check only, `T` top-up weak cells, and on the mock `F` hide the
 face, `B` bad light.
 
 ## Camera adjust (bad light / glare)
@@ -213,7 +214,8 @@ src/telemetry/        buffered, retrying upload of per-frame samples to a databa
 src/testrun/          scripted test run (jumps, path, band switches) and its full-screen player
 docs/                 data-collection.md (how to record and score clips), database-brief.md
 harness/protocol.js   the data-collection checklist
-src/ui/               default calibration overlay
+src/ui/               face view, face check, calibration overlay, score reveal (ready-made screens)
+docs/GAME-INTEGRATION.md   what is new for the game team, and how to use the screens
 harness/              hello-lanes (example game) and the debug page
 test/                 Vitest suites
 ```
