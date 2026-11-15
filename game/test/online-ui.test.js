@@ -43,6 +43,10 @@ function stubBrowser() {
   globalThis.fetch = vi.fn(async (url, init = {}) => {
     const u = String(url);
     requests.push({ url: u, headers: init.headers ?? {} });
+    if (u.includes('/charts/')) {
+      const chart = d => ({ format: 1, song: 'x', difficulty: d, notes: [{ type: 'straight', t: 2, lane: 0 }, { type: 'straight', t: 3, lane: 1 }, { type: 'straight', t: 4, lane: 2 }] });
+      return json({ songId: 'x', generatorVersion: 1, cached: false, meta: { bpm: 120, difficulty: 2 }, charts: { practice: chart('practice'), normal: chart('normal'), hard: chart('hard') } });
+    }
     if (u.includes('/documents/search')) {
       const p = new URL(u, 'http://x').searchParams;
       if (p.get('per_page') === '0') return json({ found: 9, hits: [], facet_counts: [{ field_name: 'genre', counts: [{ value: 'electronic' }, { value: 'ambient' }, { value: 'rock' }] }] });
@@ -135,16 +139,6 @@ describe('Online Library flow', () => {
     await until(() => !$$('.os-song')[1].classList.contains('previewing'));
   });
 
-  it('Choose confirms the song (step 4 starts the level from here)', async () => {
-    $$('.os-choose')[2].click();
-    await until(() => $('.popup'));
-    expect($('.popup').textContent).toContain('Track 3');
-    expect($('.popup').textContent).toContain('CC BY 4.0');
-    byText('.popup .gbtn', 'OK').click();
-    await until(() => !$('.popup'));
-    expect(app.online.chosen.id).toBe('ia_item3_k3');
-  });
-
   it('voice: mic toggle, "choose 2" asks to confirm, "no" cancels, genre runs a filtered search', async () => {
     byText('.gbtn', 'Mic').click();
     await until(() => recognizers.at(-1)?.running);
@@ -170,6 +164,39 @@ describe('Online Library flow', () => {
     await until(() => !rec.running);          // stopped outside the Online Library (and in gameplay)
     expect($$('.song-card')).toHaveLength(3);
   });
+
+  it('keyboard keys dwell for 1 s; Clear and Back keep 2 s', async () => {
+    byText('.gbtn', 'Search').click();
+    await until(() => app.screen === 'onlineSearch');
+    byText('.gbtn', 'Keyboard').click();
+    await until(() => app.screen === 'onlineKeyboard');
+    expect(byText('.os-key', 'Q').dataset.dwellMs).toBe('1000');
+    expect(byText('.os-key', 'Search').dataset.dwellMs).toBe('1000');
+    expect(byText('.os-key', 'Clear').dataset.dwellMs).toBeUndefined();
+    expect(byText('.gbtn', 'Back').dataset.dwellMs).toBeUndefined();
+  });
+
+  it('Choose: Downloading -> Analyzing -> Ready, then the level plays on the normal play screen', async () => {
+    byText('.os-key', 'A').click();
+    byText('.os-key', 'Search').click();
+    await until(() => $$('.os-song').length === 5);
+    $$('.os-choose')[2].click();
+    await until(() => app.screen === 'onlinePrepare');
+    expect($('.online-prepare h2').textContent).toBe('Track 3');
+    expect($('.online-prepare .os-attr').textContent).toContain('archive.org/details/item3');
+    await until(() => app.screen === 'play', 8000);
+    expect(requests.some(r => r.url.includes('/charts/ia_item3_k3'))).toBe(true);
+    const audioReq = requests.find(r => r.url.includes('item3/t.mp3'));
+    expect(audioReq.headers.Range).toMatch(/^bytes=0-\d+$/);         // only the first 30 s are downloaded
+    await until(() => app.debugPlay?.chart());
+    expect(app.debugPlay.chart().notes).toHaveLength(3);
+    expect($('.hud-attr').textContent).toContain('CC BY 4.0');      // attribution while playing
+    byText('.gbtn', 'Quit').click();
+    await until(() => $('.popup'));
+    byText('.popup .gbtn', 'Song select').click();
+    await until(() => app.screen === 'songs');
+    expect($$('.song-card')).toHaveLength(3);                          // built-in list untouched
+  }, 20000);
 
   it('no runtime errors', () => {
     expect(errors).toEqual([]);

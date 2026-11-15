@@ -58,3 +58,23 @@
 /* the Choose area: a 2 s dwell target; the gbtn fill (--dwell) shows progress */
 .gbtn.os-choose { min-width: 0; min-height: 96px; font-size: 24px; border-color: var(--green-deep); }
 .gbtn.os-choose::before { background: linear-gradient(90deg, rgba(57, 255, 176, 0.55), rgba(57, 255, 176, 0.25)); }
+
+.os-ready { color: var(--gold); font-weight: 700; font-size: 15px; }
+
+/* ---- level preparation ---- */
+.op-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; font: 700 24px var(--font-display); }
+.op-steps li { display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: var(--radius); border: 2px solid var(--panel-edge); color: var(--text-dim); }
+.op-steps li i { width: 14px; height: 14px; border-radius: 50%; background: var(--gray); }
+.op-steps li.active { color: var(--text); border-color: var(--purple); box-shadow: var(--glow-purple); }
+.op-steps li.active i { background: var(--purple); animation: os-pulse 1s ease-in-out infinite; }
+.op-steps li.done { color: var(--green); border-color: var(--green-deep); }
+.op-steps li.done i { background: var(--green); }
+.op-steps li.failed { color: var(--danger); border-color: var(--danger); }
+.op-steps li.failed i { background: var(--danger); animation: none; }
+.op-note { color: var(--text-dim); margin: 0; font-size: 18px; text-align: center; }
+.op-attr { max-width: 90vw; text-align: center; white-space: normal; }
+.op-actions { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; align-items: center; flex-direction: column; }
+
+/* attribution while playing an archive song, and on its results */
+.hud-attr { display: block; max-width: 46vw; margin-top: 4px; font: 500 12px var(--font-body); color: var(--text-dim); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+dd.hud-attr { max-width: 40vw; white-space: normal; }

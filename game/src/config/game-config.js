@@ -102,6 +102,8 @@ export const DWELL = {
   stickyPadding: 0.05,    // once a button is being dwelled on, it keeps it until the gaze leaves this padding
   cooldownMs: 900,        // after any activation, nothing can activate for this long
   previewDelayMs: 450,    // song previews start after the gaze rests on a song this long
+  keyActivateMs: 1000,    // on-screen keyboard keys (Online Library search) press faster
+  keyCooldownMs: 300,
 };
 
 export const PREVIEW = { durationSec: 8, fadeSec: 1.2 };

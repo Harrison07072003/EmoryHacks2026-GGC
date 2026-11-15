@@ -1,5 +1,6 @@
 // Online Library, screen 3: an on-screen keyboard for gaze (each key is a dwell button) that
 // also takes a physical keyboard. "Search" runs the search and shows the top 5 results.
+import { DWELL } from '../config/game-config.js';
 import { gazeButton, html } from './ui.js';
 import { getOnline, handleCommonVoice, runSearch } from '../online/session.js';
 import { micToggle, searchField, wireVoice } from '../online/ui.js';
@@ -40,10 +41,12 @@ export default function onlineKeyboard(root, app) {
   actions.append(
     gazeButton('Space', () => type(' '), { cls: 'os-key wide', sound: 'tick' }),
     gazeButton('⌫', () => backspace(), { cls: 'os-key', sound: 'tick' }),
-    gazeButton('Clear', () => update(''), { cls: 'os-key purple', sound: 'back' }),
+    gazeButton('Clear', () => update(''), { cls: 'os-key purple os-clear', sound: 'back' }),
     gazeButton('Search ✓', () => submit(), { cls: 'os-key wide go' }),
   );
   keys.appendChild(actions);
+  // keys press after 1 s; Clear (erases everything) and Back keep the normal 2 s
+  for (const k of keys.querySelectorAll('.os-key:not(.os-clear)')) Object.assign(k.dataset, { dwellMs: DWELL.keyActivateMs, dwellCooldownMs: DWELL.keyCooldownMs });
 
   const unwire = wireVoice(app, {
     field, statusEl: el.querySelector('.os-status'), baseText: () => text,

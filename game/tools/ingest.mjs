@@ -13,6 +13,8 @@
 //   --rate MS          minimum ms between archive.org requests (default 1000)
 //   --min-sec / --max-sec   accepted track length (default 30..600)
 //   --verbose          log every skipped track with the reason
+//   --pregenerate N    afterwards, generate levels for the N most popular songs that have none yet
+//                      (same pipeline and caches as the server); --limit 0 skips ingestion
 //   --scrape           page with archive.org's Scrape API instead of advancedsearch.php (no 10,000-item
 //                      limit, but unreliable when tested; bad pages fall back automatically)
 //
@@ -42,6 +44,7 @@ const { values: o } = parseArgs({
     'max-sec': { type: 'string', default: '600' },
     verbose: { type: 'boolean', short: 'v', default: false },
     scrape: { type: 'boolean', default: false },
+    pregenerate: { type: 'string' },
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -72,9 +75,12 @@ if (!o['dry-run']) {
   else { const added = await search.ensureSchemaFields(songsSchema(collection)); if (added.length) console.log(`added fields: ${added.join(', ')}`); }
 }
 
+const skipIngest = o.limit === '0';
+let report = { tracks: 0, items: 0, failed: 0, removed: 0, skipped: {}, sample: [] };
+if (!skipIngest) {
 console.log(`${o['dry-run'] ? 'DRY RUN · ' : ''}collection ${collection} · NonCommercial ${allowNonCommercial ? 'allowed' : 'excluded'} · NoDerivatives excluded`);
 const started = Date.now();
-const report = await runIngest({
+report = await runIngest({
   archive: createArchiveClient(http, { log: console.log, useScrape: o.scrape }), search, collection, sources, state,
   limit: o.limit ? Number(o.limit) : Infinity,
   batchSize: Number(o.batch), dryRun: o['dry-run'],
@@ -86,4 +92,27 @@ const report = await runIngest({
 if (o['dry-run']) for (const d of report.sample) console.log(JSON.stringify(d, null, 2));
 console.log(`\n${report.tracks} tracks from ${report.items} items in ${Math.round((Date.now() - started) / 1000)}s${report.failed ? `, ${report.failed} failed imports` : ''}${report.removed ? `, ${report.removed} explicit tracks removed from the index` : ''}`);
 if (Object.keys(report.skipped).length) console.log('skipped:', Object.entries(report.skipped).map(([k, v]) => `${k} ×${v}`).join(', '));
+}
+
+if (o.pregenerate && !o['dry-run']) await pregenerate(Number(o.pregenerate));
 process.exit(report.failed ? 1 : 0);
+
+/** Generate levels for the most popular songs without a current one, so they start instantly. */
+async function pregenerate(n) {
+  const { pipelineFromEnv } = await import('../server/lib/setup.js');
+  const { pipeline } = await pipelineFromEnv({ ...env, TYPESENSE_COLLECTION: collection }, { log: console.log, concurrent: 1 });
+  console.log(`\npre-generating levels for up to ${n} popular songs`);
+  let done = 0, failed = 0, page = 1;
+  while (done + failed < n) {
+    const res = await search.search(collection, { q: '*', query_by: 'title', filter_by: 'is_explicit:false', sort_by: 'popularity:desc', per_page: 100, page, include_fields: 'id' });
+    if (!res.hits.length) break;
+    for (const { document: { id } } of res.hits) {
+      if (done + failed >= n) break;
+      if (await pipeline.cached(id)) continue;
+      try { await pipeline.charts(id); done++; }
+      catch (e) { failed++; console.log(`  - ${id}: ${e.message}`); }
+    }
+    page++;
+  }
+  console.log(`pre-generated ${done} level(s)${failed ? `, ${failed} failed` : ''}`);
+}

@@ -51,14 +51,23 @@ export function trimBuffer(ctx, buffer, sec) {
 export function createSegmentLoader(ctx, { fetchFn, maxEntries = 6 } = {}) {
   const cache = new Map();   // song id -> { sec, promise }
 
-  async function load(song, sec, signal) {
+  async function loadFrom(url, song, sec, signal) {
     let budget = segmentByteBudget(sec, song.bitrateKbps);
     for (let attempt = 0; ; attempt++) {
-      const { bytes, complete } = await fetchStart(song.audioUrl, budget, { fetchFn, signal });
+      const { bytes, complete } = await fetchStart(url, budget, { fetchFn, signal });
       const decoded = await ctx.decodeAudioData(bytes);
       // short because the bitrate estimate was low (not because the song is short): fetch more once
       if (decoded.duration >= sec - 0.25 || complete || attempt >= 1) return trimBuffer(ctx, decoded, sec);
       budget *= 2;
+    }
+  }
+
+  // straight from archive.org; if that fails (network/CORS), through the game server's proxy
+  async function load(song, sec, signal) {
+    try { return await loadFrom(song.audioUrl, song, sec, signal); }
+    catch (e) {
+      if (!song.fallbackUrl || signal?.aborted) throw e;
+      return loadFrom(song.fallbackUrl, song, sec, signal);
     }
   }
 
@@ -75,4 +84,16 @@ export function createSegmentLoader(ctx, { fetchFn, maxEntries = 6 } = {}) {
       return promise;
     },
   };
+}
+
+/** A copy of `buffer` that fades to silence over its last `fadeSec` (a level ends cleanly). */
+export function withFadeOut(ctx, buffer, fadeSec = 1.5) {
+  const out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const fade = Math.min(buffer.length, Math.round(fadeSec * buffer.sampleRate)), start = buffer.length - fade;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch), dst = out.getChannelData(ch);
+    dst.set(src);
+    for (let i = 0; i < fade; i++) dst[start + i] *= 1 - i / fade;
+  }
+  return out;
 }

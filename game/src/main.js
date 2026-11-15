@@ -23,8 +23,9 @@ import faceCheck from './screens/face-check.js';
 import onlineSearch from './screens/online-search.js';
 import onlineKeyboard from './screens/online-keyboard.js';
 import onlineResults from './screens/online-results.js';
+import onlinePrepare from './screens/online-prepare.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults };
+const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults, onlinePrepare };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';

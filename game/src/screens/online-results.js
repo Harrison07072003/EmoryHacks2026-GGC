@@ -6,7 +6,7 @@
 //   A voice "choose 3" asks for confirmation first, so nothing is picked by accident.
 // - Every row shows artist and license attribution.
 import { esc, gazeButton, html, popup } from './ui.js';
-import { formatDuration, getOnline, LEVEL_SEC, PREVIEW_SEC, queryLabel } from '../online/session.js';
+import { formatDuration, getOnline, PREVIEW_SEC, queryLabel } from '../online/session.js';
 import { micToggle, notice, searchField, wireVoice } from '../online/ui.js';
 
 const LOOK_AWAY_GRACE_MS = 250;   // gaze is noisy: a glance off the row this short keeps the preview
@@ -55,7 +55,7 @@ export default function onlineResults(root, app) {
         <div class="os-info">
           <div class="os-title">${esc(song.title)}</div>
           <div class="os-meta">${esc(song.artist)} · ${esc(song.genre.slice(0, 2).join(', ') || 'no genre')} · ${formatDuration(song.duration)}
-            <span class="os-license">${esc(song.licenseName)}</span><span class="os-tag"></span></div>
+            <span class="os-license">${esc(song.licenseName)}</span>${song.chartStatus === 'ready' ? '<span class="os-ready" title="Level already generated">⚡ ready</span>' : ''}<span class="os-tag"></span></div>
           <div class="os-attr">${esc(song.attribution)}</div>
         </div>
       </div>`);
@@ -114,12 +114,7 @@ export default function onlineResults(root, app) {
     stopPreview();
     confirmPopup?.close(); confirmPopup = null;
     online.chosen = song;
-    // step 4 replaces this with download -> analyze -> play (first LEVEL_SEC seconds)
-    popup({
-      title: esc(song.title),
-      text: `${esc(song.attribution)}<br><br>Generated levels arrive in the next build step: this will download the first ${LEVEL_SEC} s, build a level and start it.`,
-      buttons: [{ label: 'OK', onPress: () => {} }],
-    });
+    app.go('onlinePrepare', { song });
   }
   function askToChoose(i) {
     const song = songs[i];

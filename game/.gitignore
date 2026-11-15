@@ -4,3 +4,5 @@ dist
 .env.local
 .DS_Store
 .cache
+online-library/charts/
+online-library/audio/

@@ -29,7 +29,7 @@ export default function play(root, app) {
     <section class="play" data-danger="0" style="--song-bg1:${pal.bg1};--song-bg2:${pal.bg2};--song-lane:${pal.lane};--song-accent:${pal.accent}">
       <canvas></canvas>
       <div class="danger-vignette"></div>
-      <div class="hud-song"><b>${esc(song.title)}</b>${esc(mode.label)}</div>
+      <div class="hud-song"><b>${esc(song.title)}</b>${esc(mode.label)}${song.attribution ? `<small class="hud-attr">${esc(song.attribution)}</small>` : ''}</div>
       <div class="hud-top"><div class="hud-score">0</div><div class="hud-combo"></div></div>
       <div class="danger-label">DANGER</div>
       <div class="frenzy-banner"><b>FRENZY</b><small>DOUBLE POINTS · NO DAMAGE</small><div class="timer"><i></i></div></div>
@@ -206,7 +206,7 @@ export default function play(root, app) {
         const target = currentTarget(jt);
         gaze.setTarget(target?.point ?? null, target?.note.id ?? null);
         stats.add(target, gaze.gaze);
-        if (state === 'playing' && judge.isDone() && t > chart.duration + 0.8) { sfx.play('complete'); finishOrFail(false, t); }
+        if (state === 'playing' && judge.isDone() && t > Math.max(chart.duration + 0.8, song.levelEndSec ?? 0)) { sfx.play('complete'); finishOrFail(false, t); }
       }
       // HUD
       const s = scoring.state;

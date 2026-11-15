@@ -18,7 +18,10 @@
     "typesense:up": "docker compose up -d typesense",
     "typesense:setup": "node tools/typesense-setup.mjs",
     "ingest": "node tools/ingest.mjs",
-    "exclude-song": "node tools/exclude-song.mjs"
+    "exclude-song": "node tools/exclude-song.mjs",
+    "server": "node server/index.js",
+    "server:install": "npm --prefix server ci",
+    "test:online": "ONLINE_IT=1 vitest run test/online-integration.test.js"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3"

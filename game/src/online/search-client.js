@@ -4,6 +4,7 @@
 import { createTypesenseClient } from '../services/search/typesense.js';
 import { buildSearchParams } from '../services/search/query.js';
 import blocklist from '../config/content-blocklist.json';
+import { GENERATOR_VERSION } from '../services/chartgen/generate.js';
 
 export const RESULT_COUNT = 5;
 // Popularity is the archive ITEM's download count, so every track of a popular album ties.
@@ -36,7 +37,8 @@ export function toSong(doc) {
     itemUrl: doc.item_url ?? '',
     audioUrl: doc.audio_url,
     bitrateKbps: doc.bitrate_kbps ?? 0,
-    chartStatus: doc.chart_status ?? 'none',
+    // a level made by an older generator version will be regenerated, so it is not 'ready'
+    chartStatus: doc.chart_status === 'ready' && doc.chart_version !== GENERATOR_VERSION ? 'none' : doc.chart_status ?? 'none',
     bpm: doc.bpm ?? null,
     source: doc.source,
   };
