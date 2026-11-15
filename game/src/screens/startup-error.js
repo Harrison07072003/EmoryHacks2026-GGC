@@ -5,6 +5,10 @@ import { esc, gazeButton, html } from './ui.js';
 
 export default function startupError(root, app, { error }) {
   const message = String(error?.message ?? error);
+  // Dev only: Vite rebuilt its dependency cache while this page was loading ("504 Outdated
+  // Optimize Dep"). A reload fetches the new files; do it once by itself so the page does not
+  // stay stuck (through Coder's forwarding Vite cannot always trigger the reload).
+  if (/\.vite\/deps|Outdated Optimize Dep/i.test(message) && reloadOnce()) return {};
   const hint = /permission|denied|notallowed/i.test(message) ? 'Allow the camera in the browser address bar, then reload.'
     : /secure|localhost|https/i.test(message) ? 'Open the game from http://localhost (or https), not a network IP.'
       : /notfound|device/i.test(message) ? 'No camera was found. Plug one in, close other apps using it, then reload.'
@@ -26,4 +30,15 @@ export default function startupError(root, app, { error }) {
     gazeButton('Dev: mouse as gaze', () => { location.search = '?input=mouse'; }, { cls: 'purple small' }),
   );
   return {};
+}
+
+/** Reload at most once per 30 s (sessionStorage guard against loops). Returns true when reloading. */
+function reloadOnce() {
+  try {
+    const key = 'rhythmeyez:deps-reload', last = Number(sessionStorage.getItem(key)) || 0;
+    if (Date.now() - last < 30000) return false;
+    sessionStorage.setItem(key, String(Date.now()));
+  } catch { return false; }
+  location.reload();
+  return true;
 }
