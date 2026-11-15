@@ -117,7 +117,11 @@ smoothing, lane hysteresis, quality and calibration all behave like the live mod
 1. `startCalibration()` shows a dot that walks 16 targets (every lane on three rows, plus
    corners). Each dot stays until the last 18 frames are steady, so there is no fixed
    duration: about a second per dot for a calm player, up to 4 s for a shaky one.
-2. Every point is scored 0-100 from steadiness during capture and its held-out error after
+   Then two play-like phases: a dot that glides through both bands (~11 s, follow it) and
+   8 dots that hop between the top and bottom band (~10 s). They are never scored, only
+   added as training data; on real clips they fixed most of the bottom-band path errors
+   and raised band switches. Turn them off with `{ pursuitMs: 0, hops: 0 }`.
+2. Every dot is scored 0-100 from steadiness during capture and its held-out error after
    fitting. Clear outliers are dropped (never more than a quarter).
 3. The overall score comes back in the result and in `onCalibrationComplete`. Below
    `minScore` (default 60) `ok` is false, `ready` stays false and no lanes are reported.
@@ -125,7 +129,13 @@ smoothing, lane hysteresis, quality and calibration all behave like the live mod
    each) and merges them with the existing data.
 5. `startCalibration({ quick: true })` uses one dot per cell once a pooled baseline exists.
 
-Draw the dots yourself with `startCalibration({ onTarget(target, index, total), onProgress(p) })`.
+Draw the dots yourself with `startCalibration({ onTarget(target, index, total, info), onProgress(p) })`
+(`info.moving` during the gliding dot, called every frame; `info.hop` during the band hops).
+
+**Learning during play:** call `eyes.confirmOnTarget({ x, y })` whenever the player hits a
+note (the reported lane and band match it). The tracker then keeps adapting to the player.
+On real clips this lifted lane jumps from 78% to 82% on target and band switches from 62%
+to 65%. Hello Lanes does not do it; the debug page's test run does.
 Otherwise a built-in full-screen overlay is used; Escape cancels it.
 
 **Keys in Hello Lanes:** `C` calibrate, `T` top-up weak cells, and on the mock `F` hide the

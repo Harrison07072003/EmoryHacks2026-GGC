@@ -7,8 +7,8 @@
 import { Engine } from '../core/engine.js';
 import { fitCalibration } from '../calibration/fit.js';
 import { cellOf, DEFAULT_LAYOUT, laneOf, bandOf } from '../signals/lanes.js';
-import { labelledPoints, pursuitPoint } from './evaluate.js';
-import { PHASES } from '../testrun/script.js';
+import { labelledPoints, playLikePoints } from './evaluate.js';
+import { isHit, PHASES } from '../testrun/script.js';
 import { mean, median } from '../util/math.js';
 
 const SETTLE_MS = 400;          // time allowed to move before "on target" is counted
@@ -16,18 +16,25 @@ const MAX_LAG_MS = 500;
 
 /** Calibration for replay: the clip's own dots, or the one stored when recording started. */
 export function clipCalibration(recording, layout = DEFAULT_LAYOUT) {
-  const points = labelledPoints(recording), pursuit = pursuitPoint(recording);
-  const source = points.length >= 6 ? (pursuit ? [...points, pursuit] : points) : recording.meta?.calibrationPoints ?? [];
+  const points = labelledPoints(recording);
+  const source = points.length >= 6 ? [...points, ...playLikePoints(recording)] : recording.meta?.calibrationPoints ?? [];
   return source.length ? fitCalibration(source, { layout }) : null;
 }
 
-/** Push every frame through a fresh engine; returns what it reported per game frame. */
-export function replayFrames(recording, calibration, layout = DEFAULT_LAYOUT) {
-  const engine = new Engine({ layout, minScore: 0 }), out = [];
+/**
+ * Push every frame through a fresh engine; returns what it reported per game frame.
+ * learn: confirm hits like the live test run does, so the replay includes play learning.
+ */
+export function replayFrames(recording, calibration, layout = DEFAULT_LAYOUT, { learn = true } = {}) {
+  const engine = new Engine({ layout, minScore: 0 }), out = [], first = new Map();
   engine.setCalibration(calibration);
   for (const fr of recording.frames) {
     engine.handleFrame(fr);
-    if (fr.src === 'game') out.push({ ...fr, out: { x: engine.state.gaze.x, y: engine.state.gaze.y, lane: engine.state.lane, band: engine.state.band } });
+    if (fr.src !== 'game') continue;
+    if (!first.has(fr.tid)) first.set(fr.tid, fr.t);
+    const s = engine.state;
+    out.push({ ...fr, out: { x: s.gaze.x, y: s.gaze.y, lane: s.lane, band: s.band } });
+    if (learn && isHit(fr.tid.split(':')[0], fr.t - first.get(fr.tid), s, fr.target, layout)) engine.confirmOnTarget(fr.target);
   }
   return out;
 }
@@ -86,11 +93,11 @@ function scoreGameFrames(frames, layout) {
  *          path: { errorX, errorY (raw, lag included), lagMs (best-fitting delay),
  *                  errorAtLag (distance once that delay is removed), lane, band, inBand }
  */
-export function evaluatePlay(recording, { layout = DEFAULT_LAYOUT } = {}) {
+export function evaluatePlay(recording, { layout = DEFAULT_LAYOUT, learn = true } = {}) {
   const game = recording.frames.filter(f => f.src === 'game');
   if (!game.length) return null;
   const calibration = clipCalibration(recording, layout);
-  const replay = calibration?.model ? scoreGameFrames(replayFrames(recording, calibration, layout), layout) : null;
+  const replay = calibration?.model ? scoreGameFrames(replayFrames(recording, calibration, layout, { learn }), layout) : null;
   const live = game.some(f => f.out) ? scoreGameFrames(game, layout) : null;
   return { replay, live, calibrationScore: calibration?.score ?? null };
 }

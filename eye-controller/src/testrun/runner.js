@@ -1,12 +1,13 @@
 // Plays the test run full screen and tells the tracker where the player should be looking
-// on every frame (eyes.setTarget), so a recording made during it can be scored.
+// on every frame (eyes.setTarget), so a recording made during it can be scored. Like a game,
+// it confirms hits (eyes.confirmOnTarget) so the tracker keeps learning; learn: false turns that off.
 // The player's own gaze is deliberately not shown: chasing the cursor would spoil the data.
-import { buildTestRun, PHASES } from './script.js';
+import { buildTestRun, isHit, PHASES } from './script.js';
 
 const COUNTDOWN_MS = 1500;
 
 /** @returns Promise<{ aborted: boolean }> */
-export function runTestRun(eyes, { area = document.body, seed = 1 } = {}) {
+export function runTestRun(eyes, { area = document.body, seed = 1, learn = true } = {}) {
   const run = buildTestRun({ seed, layout: eyes.layout });
   const { lanes, bandSplit } = eyes.layout;
   const root = document.createElement('div');
@@ -20,7 +21,7 @@ export function runTestRun(eyes, { area = document.body, seed = 1 } = {}) {
 
   return new Promise(resolve => {
     const start = performance.now() + COUNTDOWN_MS;
-    let raf = 0;
+    let raf = 0, noteId = null, noteStart = 0;
     const finish = aborted => {
       cancelAnimationFrame(raf);
       removeEventListener('keydown', onKey);
@@ -36,6 +37,8 @@ export function runTestRun(eyes, { area = document.body, seed = 1 } = {}) {
       const cur = ms < 0 ? { phase: 'rest', next: 'jumps' } : run.at(ms);
       if (!cur) return finish(false);
       eyes.setTarget(cur.id ? { x: cur.x, y: cur.y } : null, cur.id ?? null);
+      if (cur.id !== noteId) { noteId = cur.id; noteStart = now; }
+      if (learn && cur.id && isHit(cur.phase, now - noteStart, eyes.state, cur, eyes.layout)) eyes.confirmOnTarget({ x: cur.x, y: cur.y });
 
       // lane grid, like the game
       for (let i = 0; i < lanes; i++) for (const top of [true, false]) {

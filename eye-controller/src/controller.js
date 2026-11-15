@@ -4,7 +4,7 @@ import { createEmitter } from './core/emitter.js';
 import { Engine } from './core/engine.js';
 import { CalibrationSession } from './calibration/session.js';
 import { fitCalibration, pointGram } from './calibration/fit.js';
-import { defaultTargets, quickTargets, topUpTargets, sameCell } from './calibration/targets.js';
+import { defaultTargets, hopTargets, quickTargets, topUpTargets, sameCell } from './calibration/targets.js';
 import { createCalibrationOverlay } from './ui/calibration-overlay.js';
 import { DEFAULT_LAYOUT, cellOf } from './signals/lanes.js';
 import { defaultStore } from './storage/kv.js';
@@ -14,6 +14,7 @@ import { addGram, createGram, gramFromJSON } from './model/ridge.js';
 import { FEATURE_COUNT } from './cv/features.js';
 
 const DEFAULT_PURSUIT_MS = 10000;
+const DEFAULT_HOPS = 8;
 
 /**
  * @param source   { start(videoEl, onFrame), stop(), lookAt?(target) }
@@ -29,7 +30,7 @@ export function buildController(source, options = {}) {
 
   const summary = c => ({
     score: c.score, ok: engine.state.ready, weakCells: c.weakCells,
-    points: c.points.map(p => ({ target: p.target, score: p.score, kept: p.kept, steadiness: p.steadiness, residual: p.residual })),
+    points: c.points.map(p => ({ target: p.target, score: p.score, kept: p.kept, steadiness: p.steadiness, residual: p.residual, ...(p.kind ? { kind: p.kind } : {}) })),
   });
 
   function applyPoints(points) {
@@ -68,10 +69,12 @@ export function buildController(source, options = {}) {
      * options: topUp   - only re-capture the weak cells and merge with the existing data
      *          quick   - one dot per cell; only shortens things once a pooled baseline exists
      *          pursuitMs - length of the moving-dot phase after the dots (default 10 s, 0 = none)
+     *          hops    - number of top/bottom band hops at the end (default 8, 1.2 s each, 0 = none)
      *          targets - your own [{x, y}] list
      *          area    - element the dots are drawn over (default: the whole page)
      *          onTarget(target | null, index, total, info), onProgress(0-1) - draw the dots yourself;
-     *                    info.moving is true during the moving-dot phase (called every frame)
+     *                    info.moving is true during the moving-dot phase (called every frame),
+     *                    info.hop during the band hops
      */
     startCalibration(opts = {}) {
       if (!running) return Promise.reject(new Error('Eye tracking is not running: await init() first'));
@@ -81,14 +84,16 @@ export function buildController(source, options = {}) {
       const topUp = !!opts.topUp && previous.length > 0 && weak.length > 0;
       const targets = opts.targets ?? (topUp ? topUpTargets(weak, layout) : opts.quick && baseline.samples > 0 ? quickTargets(layout) : defaultTargets(layout));
       // a moving-dot phase follows the dots (not for a top-up or a custom target list)
-      const pursuitMs = opts.pursuitMs ?? (topUp || opts.targets ? 0 : DEFAULT_PURSUIT_MS);
+      const playLike = !topUp && !opts.targets;
+      const pursuitMs = opts.pursuitMs ?? (playLike ? DEFAULT_PURSUIT_MS : 0);
+      const hops = playLike ? hopTargets(opts.hops ?? DEFAULT_HOPS, layout) : [];
       const ui = opts.onTarget
         ? { show: opts.onTarget, progress: opts.onProgress ?? (() => {}), destroy() {} }
         : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort()) : { show() {}, progress() {}, destroy() {} };
 
       return new Promise(resolve => {
         session = engine.session = new CalibrationSession({
-          targets, pursuitMs, ...opts.capture,
+          targets, pursuitMs, hops, ...opts.capture,
           onTarget: (target, index, info) => { ui.show(target, index, targets.length, info); source.lookAt?.(target); },
           onProgress: p => ui.progress(p),
           onDone: (points, info) => {

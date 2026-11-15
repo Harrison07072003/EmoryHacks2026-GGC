@@ -35,8 +35,8 @@ export function scalePrior(baselineGram, pseudoSamples) {
  */
 export function fitCalibration(points, { prior = null, priorSamples = 30, headPenalty = 6, layout = DEFAULT_LAYOUT, dropBelow = 45, maxDropFrac = 0.25 } = {}) {
   const scaledPrior = scalePrior(prior, priorSamples);
-  // a pursuit point (moving dot) always counts toward the fit but is never scored or dropped
-  const moving = points.map(p => p.kind === 'pursuit');
+  // play-like points (moving dot, band hops) always count toward the fit but are never scored or dropped
+  const moving = points.map(p => !!p.kind);
   const usable = points.map(p => p.samples.length >= 3);
   const grams = points.map((p, i) => (usable[i] ? pointGram(p) : null));
   let kept = usable.slice();
@@ -75,7 +75,7 @@ export function fitCalibration(points, { prior = null, priorSamples = 30, headPe
   const scored = points.map((p, i) => ({
     ...p, residual: res[i], score: scores[i], kept: kept[i], cell: moving[i] ? null : cellOf(p.target, layout),
   }));
-  const keptPoints = scored.filter(p => p.kept && p.kind !== 'pursuit');
+  const keptPoints = scored.filter(p => p.kept && !p.kind);
   const weakCells = allCells(layout).filter(cell => {
     const mine = keptPoints.filter(p => sameCell(p.cell, cell));
     return !mine.length || mean(mine.map(p => p.score)) < WEAK_CELL_SCORE;
@@ -89,7 +89,7 @@ export function fitCalibration(points, { prior = null, priorSamples = 30, headPe
   return {
     model: gramWeight(fitGram) > 0 ? fitGazeModel(fitGram, { headPenalty }) : null,
     gram, fitGram,
-    score: enough ? overallScore(scored.filter(p => p.kind !== 'pursuit'), uncovered) : 0,
+    score: enough ? overallScore(scored.filter(p => !p.kind), uncovered) : 0,
     points: scored,
     weakCells,
     headRef: samples.length ? HEAD_IDX.map(i => mean(samples.map(f => f[i]))) : null,

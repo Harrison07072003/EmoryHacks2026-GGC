@@ -22,6 +22,7 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
       dot.style.transition = info?.moving ? 'none' : 'left .25s, top .25s'; // a moving dot must not lag
       dot.style.left = `${target.x * 100}%`; dot.style.top = `${target.y * 100}%`;
       if (info?.moving) { msg.textContent = 'Follow the dot with your eyes'; return; }
+      if (info?.hop) msg.textContent = 'Look at each dot as it jumps';
       dot.style.setProperty('--p', '0%');
       if (index > 0) msg.textContent = `${index + 1} / ${total}`;
     },

@@ -3,7 +3,7 @@
 import { FEATURE_VERSION } from './cv/features.js';
 
 export const VERSIONS = {
-  app: '0.2.1',          // 0.2: calibration moving-dot phase, 1080p request. 0.2.1: back to 64x32 eye crops
+  app: '0.3.0',          // 0.2 moving dot; 0.2.1 64x32 crops; 0.3 band hops in calibration + learning on hits
   features: FEATURE_VERSION,
   mediapipeRuntime: '1.2.3',
   mediapipeModel: 'face_landmarker/float16/1',

@@ -3,7 +3,7 @@
 //   jumps   - notes hop between lanes in the top band (fast discrete moves)
 //   path    - a dot glides along the bottom band (smooth pursuit)
 //   switch  - notes alternate between the bands (vertical moves)
-import { cellCenter, DEFAULT_LAYOUT } from '../signals/lanes.js';
+import { cellCenter, cellOf, DEFAULT_LAYOUT } from '../signals/lanes.js';
 import { rng } from '../util/math.js';
 
 export const PHASES = {
@@ -60,4 +60,17 @@ export function buildTestRun({ seed = 1, layout = DEFAULT_LAYOUT } = {}) {
       return seg ? seg.fn(ms - seg.start) : null;
     },
   };
+}
+
+/**
+ * What a game would do: on a hit, tell the tracker where the player is looking
+ * (eyes.confirmOnTarget) so it keeps learning. A hit = the reported cell matches the note
+ * once the eyes have had time to arrive, or the gaze is in the bottom band on the path.
+ * Shared by the live test run and offline replay so both measure the same thing.
+ */
+export function isHit(phase, sinceMs, state, target, layout = DEFAULT_LAYOUT) {
+  if (sinceMs < 400) return false;
+  if (phase === 'path') return state.band === 'bottom';
+  const cell = cellOf(target, layout);
+  return !!cell && state.lane === cell.lane && state.band === cell.band;
 }
