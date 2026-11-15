@@ -3,7 +3,8 @@
 // a spinning dashed ring while the eyes travel to it, then a reticle that tightens as the
 // eyes steady (and loosens, with a "hold steady" hint, when they wobble) while the ring
 // fills, then a green lock with a burst. Also a comet trail while following, the three
-// phases, and a live mini face view so the player sees at once if tracking drops. Escape cancels.
+// phases, and a live mini face view so the player sees at once if tracking drops. During the
+// band hops, the band the tracker thinks you look at lights up (green = right band). Escape cancels.
 import { createFaceView } from './face-view.js';
 import { DEFAULT_LAYOUT } from '../signals/lanes.js';
 
@@ -21,10 +22,10 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   root.append(canvas);
-  let face = null;
+  let face = null, mini = null;
   if (eyes) {
-    const mini = document.createElement('canvas');
-    mini.style.cssText = 'position:absolute;inset:auto 16px 16px auto;width:240px;height:135px;border-radius:10px;border:1px solid rgba(77,225,255,.35)';
+    mini = document.createElement('canvas');
+    mini.style.cssText = 'position:absolute;inset:auto 16px 16px auto;width:240px;height:135px;border-radius:10px;border:1px solid rgba(77,225,255,.35);transition:opacity .25s';
     root.append(mini);
     face = createFaceView(eyes, mini, { eyes: false, lanes: false, oval: false, labels: false });
   }
@@ -50,7 +51,9 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
       st.trail.push({ x, y }); if (st.trail.length > 28) st.trail.shift();
       st.trail.forEach((p, i) => { g.fillStyle = `rgba(${COLORS.glow},${(i / st.trail.length) * 0.45})`; g.beginPath(); g.arc(p.x, p.y, (6 + i * 0.5) * s, 0, 7); g.fill(); });
     } else st.trail.length = 0;
+    if (st.phase === 'hops' && st.gaze && st.stage === 'capturing') drawGazeBand(g, W, H, layout, st);
     if (st.target) drawDot(g, x, y, s, st, now);
+    if (mini) fadeMiniNear(mini, root, [st.target && { x: st.target.x * root.clientWidth, y: st.target.y * root.clientHeight }, ...st.trail.map(p => ({ x: p.x / s, y: p.y / s }))]);
     drawBursts(g, st, now, s);
     drawHeader(g, W, s, st);
     if (eyes && !eyes.faceData().frame?.face) text(g, 'Face lost – look at the screen', W / 2, H - 40 * s, 22 * s, '#ff4d6d');
@@ -68,6 +71,8 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
     progress(p, info) {
       if (info?.stage && info.stage !== st.stage) { st.stage = info.stage; st.stageSince = performance.now(); }
       if (info) st.steady = info.steadiness ?? st.steady;
+      st.gaze = info?.gaze ?? null;                    // hops: where the tracker thinks the player looks
+      if (info?.onTarget !== undefined && info.onTarget !== st.onTarget) { st.onTarget = info.onTarget; st.onTargetSince = performance.now(); }
       if (p >= 1 && st.progress < 1 && st.phase !== 'pursuit' && st.target) {
         st.bursts.push({ x: st.shown.x, y: st.shown.y, t: performance.now() });     // captured!
         st.flashes.push({ x: st.target.x, y: st.target.y, t: performance.now() });
@@ -76,6 +81,24 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
     },
     destroy() { cancelAnimationFrame(raf); face?.destroy(); root.remove(); removeEventListener('keydown', onKey); },
   };
+}
+
+/** The corner camera must never hide a dot: fade it out while a dot (or the trail) is near it. */
+function fadeMiniNear(mini, root, points, margin = 70) {
+  const m = mini.getBoundingClientRect(), r = root.getBoundingClientRect();
+  const near = points.some(p => p && p.x > m.left - r.left - margin && p.x < m.right - r.left + margin && p.y > m.top - r.top - margin && p.y < m.bottom - r.top + margin);
+  const want = near ? '0.06' : '1';
+  if (mini.style.opacity !== want) mini.style.opacity = want;
+}
+
+/**
+ * Hops: light up the band the tracker thinks the player is looking at, green when it is the
+ * dot's band, amber when not, so the player can see the up/down check working.
+ */
+function drawGazeBand(g, W, H, { bandSplit }, st) {
+  const top = st.gaze.y < bandSplit, right = (st.target.y < bandSplit) === top;
+  g.fillStyle = right ? 'rgba(57,255,176,0.08)' : 'rgba(255,211,77,0.08)';
+  g.fillRect(0, top ? 0 : bandSplit * H, W, (top ? bandSplit : 1 - bandSplit) * H);
 }
 
 function drawGrid(g, W, H, { lanes, bandSplit }, st, now) {
@@ -104,11 +127,12 @@ function drawDot(g, x, y, s, st, now) {
     g.strokeStyle = 'rgba(232,236,255,0.55)'; g.lineWidth = 3 * s; g.beginPath(); g.arc(x, y, r * 1.35, 0, 7); g.stroke();
     g.setLineDash([]);
   } else if (st.phase !== 'pursuit') {
-    if (st.phase === 'dots') drawReticle(g, x, y, r, s, locked ? 1 : st.steadyShown, now);
+    if (st.phase === 'dots' || st.phase === 'hops') drawReticle(g, x, y, r, s, locked ? 1 : st.steadyShown, now);
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 6 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
     g.strokeStyle = locked ? COLORS.ok : COLORS.ring; g.lineCap = 'round';
     g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, locked ? 1 : st.ring)); g.stroke(); g.lineCap = 'butt';
     if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
+    if (st.phase === 'hops' && !locked && st.stage === 'capturing' && st.onTarget === false && now - st.onTargetSince > 600) text(g, 'look at the dot', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
   }
   g.fillStyle = COLORS.dot; g.beginPath(); g.arc(x, y, r * 0.5 * pop, 0, 7); g.fill();
   g.fillStyle = locked ? COLORS.ok : COLORS.core; g.beginPath(); g.arc(x, y, r * 0.16 * pop, 0, 7); g.fill();

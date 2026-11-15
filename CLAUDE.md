@@ -60,6 +60,8 @@ and `src/smoothing/gaze-smoother.js` are first estimates and are expected to mov
   `cancelCalibration()`. Seen on a real webcam and approved after toning the mesh down; the face
   label is CONDITIONS % (live conditions), not `state.quality` (capped at 40 before calibrating).
   Notes for the game team: `eye-controller/docs/GAME-INTEGRATION.md`.
+- v0.5: band hops are gated on a provisional model from the dots (calibration/session.js);
+  before that they were timed and passed while looking anywhere (and fed wrong samples).
 - The `rhythmeyez-game` branch is the game team's (a Coder commit-attribution workaround):
   read it for intent, never write to it. All our work goes on `main`.
 - Firestore adapter for the pooled baseline and profiles is not built.

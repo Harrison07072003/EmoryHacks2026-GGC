@@ -152,6 +152,35 @@ describe('moving-dot (pursuit) phase', () => {
   });
 });
 
+describe('band hops check where the player looks', () => {
+  const hops = [{ x: 0.125, y: 0.25 }, { x: 0.625, y: 0.75 }, { x: 0.875, y: 0.25 }, { x: 0.375, y: 0.75 }];
+  /** Full dots, then hops; `during` decides where the eyes are during the hops. */
+  function run(during) {
+    const eye = createSimEye({ seed: 5 }), stages = [];
+    const session = new CalibrationSession({ targets: defaultTargets(), hops, onProgress: (_p, info) => session.phase === 'hops' && stages.push(info) }).start();
+    let t = 0;
+    for (let i = 0; i < 6000 && !session.done; i++) {
+      const look = session.phase === 'hops' ? during(session.target) : session.target;
+      session.push(eye((t += DT), look));
+    }
+    return { session, stages, hopPoints: session.points.filter(p => p.kind === 'hop') };
+  }
+  it('fills each hop while the player looks at it, and reports the live gaze', () => {
+    const { session, stages, hopPoints } = run(target => target);
+    expect(session.done).toBe(true);
+    expect(hopPoints).toHaveLength(4);
+    expect(hopPoints.every(p => p.samples.length === 15)).toBe(true);
+    expect(stages.some(s => s.gaze && s.onTarget)).toBe(true);
+  });
+  it('does not pass when the player looks at the other band: each hop gives up and adds no data', () => {
+    const { session, stages, hopPoints } = run(target => ({ x: target.x, y: target.y < 0.5 ? 0.75 : 0.25 }));
+    expect(session.done).toBe(true);
+    expect(hopPoints).toHaveLength(0);
+    expect(stages.filter(s => s.stage === 'skipped')).toHaveLength(4);
+    expect(stages.filter(s => s.stage === 'capturing').every(s => s.onTarget === false)).toBe(true);
+  });
+});
+
 describe('fitting and scoring a calibration', () => {
   it('gives a high score and an accurate model on clean data', () => {
     const fit = fitCalibration(pointsFor(5));

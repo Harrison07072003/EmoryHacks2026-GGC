@@ -12,7 +12,7 @@ Since v0.3 a full calibration has three phases, about 45 seconds in all:
 |---|---|---|
 | dots | look at 16 dots (8 for `quick` once a pooled baseline exists) | `info.phase === 'dots'`; index / total count the dots |
 | pursuit | follow a gliding dot (`pursuitMs`, default 10 s) | `info.phase === 'pursuit'`, `info.moving`; called every frame |
-| hops | look at 8 dots jumping between the top and bottom band (1.2 s each) | `info.phase === 'hops'`, `info.hop`; **index / total now count the hops (1/8 … 8/8)** |
+| hops | look at 8 dots jumping between the top and bottom band | `info.phase === 'hops'`, `info.hop`; **index / total count the hops (1/8 … 8/8)** |
 
 The hops are new in v0.3. Before v0.4 your counter showed "17 / 16" during them; it now
 reads "1 / 8" … "8 / 8" with no change on your side. To restyle them, branch on `info.hop`.
@@ -25,6 +25,15 @@ can drop or shorten them:
 ```js
 eyes.startCalibration({ quick: true, pursuitMs: 5000, hops: 4 });   // or hops: 0
 ```
+
+**Hops are checked against the player's gaze (v0.5).** A provisional model fitted on the
+dots tells which band the player looks at; a hop only fills while the gaze is in the dot's
+band and about its lane (15 frames), only those frames are used, and a hop the player never
+looks at gives up after 4 s and adds nothing. Before v0.5 hops were timed and passed even
+when looking elsewhere. During the hops `onProgress(p, info)` also gives `info.gaze` (the
+provisional gaze point) and `info.onTarget`; the built-in screen lights the band the gaze
+is in (green = the dot's band, amber = wrong) and shows "look at the dot". `info.stage` can
+be `'skipped'` when a hop gave up.
 
 **Make the dots feel tracked, not timed.** Each dot now captures 24 frames (was 18) and
 holds a 0.3 s "locked" moment before moving on. `onProgress(p, info)` gets a second
@@ -94,7 +103,7 @@ If you would rather not maintain your own:
   glowing dot with seeking ring, steadiness reticle and capture ring, a green lock with
   particle burst and cell flash on each capture, comet trail while following, phase header
   (Hold / Follow / Jump), and a live mini face view (no oval or text) that warns when the
-  face is lost.
+  face is lost and fades out whenever a dot comes near it.
 - `showCalibrationResult(result, { layout })` → score counts up in a ring, then the 4 x 2
   cells light up with their own scores and weak cells are marked. Resolves
   `'continue' | 'retry' | 'topup'` (Enter / R / T or click). These screens are keyboard and

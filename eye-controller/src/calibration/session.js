@@ -13,10 +13,16 @@
 //   pursuit - one dot glides through both bands for `pursuitMs`; each frame is a sample
 //             labelled with where the dot was PURSUIT_LAG_MS earlier. (Path in the bottom
 //             band: 74% -> 98% of the time.)
-//   hops    - dots jump between the bands, `hopMs` each; frames from HOP_SETTLE_MS on are
-//             samples. (Held-out band switches on target: 60% -> 70%.)
+//   hops    - dots jump between the bands. A provisional model fitted on the dots so far
+//             checks where the player looks: a hop only fills while the gaze is in the
+//             dot's band (and roughly its lane), only those frames become samples, and it
+//             gives up after `hopMaxMs`. Before v0.5 hops were timed and passed even when
+//             the player looked elsewhere, which also fed wrong samples into the model.
 // Neither phase is scored or dropped; they only add training data.
 import { steadinessOf } from './scoring.js';
+import { addGram, addSample, createGram } from '../model/ridge.js';
+import { fitGazeModel, predictGaze } from '../model/gaze-model.js';
+import { FEATURE_COUNT } from '../cv/features.js';
 
 export const PURSUIT_LAG_MS = 100;   // how far the eyes trail a smoothly moving dot
 const PURSUIT_LEAD_MS = 800;         // dot holds still first so the eyes can find it
@@ -29,8 +35,8 @@ export function pursuitPath(ms, movingMs) {
 }
 
 export class CalibrationSession {
-  constructor({ targets, settleMs = 500, minSamples = 24, steadyBar = 0.6, maxCaptureMs = 3500, lockMs = 300, pursuitMs = 0, hops = [], hopMs = 1200, onTarget, onProgress, onDone } = {}) {
-    Object.assign(this, { targets, settleMs, minSamples, steadyBar, maxCaptureMs, lockMs, pursuitMs, hops, hopMs, onTarget, onProgress, onDone });
+  constructor({ targets, settleMs = 500, minSamples = 24, steadyBar = 0.6, maxCaptureMs = 3500, lockMs = 300, pursuitMs = 0, hops = [], hopFrames = 15, hopMaxMs = 4000, hopLaneTolerance = 0.3, bandSplit = 0.5, onTarget, onProgress, onDone } = {}) {
+    Object.assign(this, { targets, settleMs, minSamples, steadyBar, maxCaptureMs, lockMs, pursuitMs, hops, hopFrames, hopMaxMs, hopLaneTolerance, bandSplit, onTarget, onProgress, onDone });
     this.points = []; this.index = -1; this.done = false;
     this.phase = 'dots'; this.pursuit = null; this.hop = null;
   }
@@ -64,6 +70,7 @@ export class CalibrationSession {
     }
     if ((this.phase === 'dots' || this.phase === 'pursuit') && this.hops.length) {
       this.phase = 'hops';
+      this.provisional = provisionalModel(this.points);
       this.hop = { i: 0, t0: null, samples: [] };
       return this.onTarget?.(this.target, 0, { hop: true, phase: 'hops' });
     }
@@ -120,14 +127,36 @@ export class CalibrationSession {
 
   pushHop(frame) {
     const h = this.hop, target = this.target;
+    if (h.lockedUntil !== undefined) { if (frame.t >= h.lockedUntil) this.nextHop(); return; }
     if (h.t0 === null) h.t0 = frame.t;
     const ms = frame.t - h.t0;
-    if (ms >= HOP_SETTLE_MS && frame.face && !frame.blink && frame.f) h.samples.push(frame.f);
-    this.onProgress?.(Math.min(1, ms / this.hopMs));
-    if (ms < this.hopMs) return;
-    if (h.samples.length) this.points.push({ kind: 'hop', target, samples: h.samples, targets: h.samples.map(() => target), steadiness: 1, weak: false });
-    if (h.i + 1 >= this.hops.length) return this.nextPhase();
-    this.hop = { i: h.i + 1, t0: null, samples: [] };
+    if (ms < HOP_SETTLE_MS) return void this.onProgress?.(0, { stage: 'seeking', steadiness: 0, gaze: null });
+    const usable = frame.face && !frame.blink && frame.f;
+    const gaze = usable && this.provisional ? predictGaze(this.provisional, frame.f) : null;
+    // no provisional model (too few dots): fall back to counting every usable frame
+    const onTarget = usable && (!gaze || this.lookingAt(gaze, target));
+    if (onTarget) h.samples.push(frame.f);
+    const p = Math.min(1, h.samples.length / this.hopFrames);
+    if (p >= 1 || ms >= this.hopMaxMs) return this.finishHop(frame.t, p >= 1);
+    this.onProgress?.(p, { stage: 'capturing', steadiness: onTarget ? 1 : 0, gaze, onTarget: !!onTarget });
+  }
+
+  /** Same band as the target, and within about a lane of it. */
+  lookingAt(gaze, target) {
+    const band = y => (y < this.bandSplit ? 'top' : 'bottom');
+    return band(gaze.y) === band(target.y) && Math.abs(gaze.x - target.x) < this.hopLaneTolerance;
+  }
+
+  finishHop(t, captured) {
+    const h = this.hop, target = this.target;
+    if (captured) this.points.push({ kind: 'hop', target, samples: h.samples, targets: h.samples.map(() => target), steadiness: 1, weak: false });
+    this.onProgress?.(1, { stage: captured ? 'locked' : 'skipped', steadiness: captured ? 1 : 0 });
+    h.lockedUntil = t + (captured ? this.lockMs : 0);
+  }
+
+  nextHop() {
+    if (this.hop.i + 1 >= this.hops.length) return this.nextPhase();
+    this.hop = { i: this.hop.i + 1, t0: null, samples: [] };
     this.onTarget?.(this.target, this.hop.i, { hop: true, phase: 'hops' });
   }
 
@@ -145,4 +174,16 @@ export class CalibrationSession {
     this.onTarget?.(null, this.index);
     this.onDone?.(this.points, { aborted: true });
   }
+}
+
+/** A quick both-eyes model from the points captured so far (dots, moving dot), or null. */
+function provisionalModel(points) {
+  const usable = points.filter(p => p.samples.length >= 3);
+  if (usable.filter(p => !p.kind).length < 6) return null;
+  const gram = usable.reduce((g, p) => {
+    const one = createGram(FEATURE_COUNT);
+    p.samples.forEach((f, i) => { const t = p.targets?.[i] ?? p.target; addSample(one, f, t.x, t.y); });
+    return addGram(g, one);
+  }, createGram(FEATURE_COUNT));
+  return fitGazeModel(gram, { only: 'both' });
 }

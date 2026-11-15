@@ -94,7 +94,7 @@ export function buildController(source, options = {}) {
 
       return new Promise(resolve => {
         session = engine.session = new CalibrationSession({
-          targets, pursuitMs, hops, ...opts.capture,
+          targets, pursuitMs, hops, bandSplit: layout.bandSplit, ...opts.capture,
           // during the hops, index / total count the hops ("3 / 8"), not the dots
           onTarget: (target, index, info) => { ui.show(target, index, info?.hop ? hops.length : targets.length, info); source.lookAt?.(target); },
           onProgress: (p, info) => ui.progress(p, info),
