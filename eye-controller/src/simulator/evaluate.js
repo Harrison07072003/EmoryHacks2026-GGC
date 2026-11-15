@@ -7,7 +7,7 @@ import { mean } from '../util/math.js';
 import { HOP_SETTLE_MS, PURSUIT_LAG_MS } from '../calibration/session.js';
 
 /** Split a recording into one point per stretch of frames that share a target. */
-export function labelledPoints(recording, { settleMs = 500, maxSamples = 18 } = {}) {
+export function labelledPoints(recording, { settleMs = 500, maxSamples = 24 } = {}) {
   const points = [];
   let cur = null;
   for (const fr of recording.frames) {

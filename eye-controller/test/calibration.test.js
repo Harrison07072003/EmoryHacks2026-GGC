@@ -70,8 +70,21 @@ describe('adaptive capture session', () => {
     const { session, ms } = run();
     expect(session.done).toBe(true);
     expect(session.points).toHaveLength(4);
-    expect(session.points.every(p => !p.weak && p.samples.length === 18 && p.steadiness >= 0.6)).toBe(true);
-    expect(ms / 4).toBeLessThan(1500);
+    expect(session.points.every(p => !p.weak && p.samples.length === 24 && p.steadiness >= 0.6)).toBe(true);
+    expect(ms / 4).toBeLessThan(2000);   // settle 0.5 s + 24 frames + a 0.3 s lock per dot
+  });
+  it('reports seeking, then capturing with live steadiness, then locked, holding the dot briefly', () => {
+    const eye = createSimEye({ seed: 3 }), stages = [], shown = [];
+    const session = new CalibrationSession({ targets: defaultTargets().slice(0, 2), onTarget: t => shown.push(t), onProgress: (p, info) => stages.push(info.stage) }).start();
+    let t = 0, lockedAt = null, nextAt = null;
+    for (let i = 0; i < 400 && !session.done; i++) {
+      t += DT; session.push(eye(t, session.target));
+      if (lockedAt === null && stages.at(-1) === 'locked') lockedAt = t;
+      if (lockedAt !== null && nextAt === null && shown.length === 2) nextAt = t;
+    }
+    const order = stages.filter((s, i) => s !== stages[i - 1]);
+    expect(order.slice(0, 3)).toEqual(['seeking', 'capturing', 'locked']);
+    expect(nextAt - lockedAt).toBeGreaterThanOrEqual(300);
   });
   it('keeps sampling a shaky target, then keeps its best window and marks it weak', () => {
     const calm = run(), shaky = run({ cond: { light: 'bad' } });

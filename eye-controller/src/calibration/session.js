@@ -2,8 +2,11 @@
 // timers), so the simulator and recorded sessions run through exactly the same code.
 //
 // Each target is held until the last `minSamples` frames are steady enough (`steadyBar`).
-// There is no fixed duration: a calm player finishes a dot in about a second, a shaky one
+// There is no fixed duration: a calm player finishes a dot in about 1.5 s, a shaky one
 // keeps it up to `maxCaptureMs`, after which the best window seen is kept and marked weak.
+// onProgress(p, { stage, steadiness }) reports it live so the screen can show the eyes being
+// tracked: stage 'seeking' (eyes travelling), 'capturing' (p rises with steadiness and falls
+// when the eyes wobble), 'locked' (captured; held `lockMs` so the player sees it, then next).
 //
 // After the dots, two optional phases that look like play, because still dots alone
 // mispredict the vertical during play (measured on real clips):
@@ -26,8 +29,8 @@ export function pursuitPath(ms, movingMs) {
 }
 
 export class CalibrationSession {
-  constructor({ targets, settleMs = 500, minSamples = 18, steadyBar = 0.6, maxCaptureMs = 3500, pursuitMs = 0, hops = [], hopMs = 1200, onTarget, onProgress, onDone } = {}) {
-    Object.assign(this, { targets, settleMs, minSamples, steadyBar, maxCaptureMs, pursuitMs, hops, hopMs, onTarget, onProgress, onDone });
+  constructor({ targets, settleMs = 500, minSamples = 24, steadyBar = 0.6, maxCaptureMs = 3500, lockMs = 300, pursuitMs = 0, hops = [], hopMs = 1200, onTarget, onProgress, onDone } = {}) {
+    Object.assign(this, { targets, settleMs, minSamples, steadyBar, maxCaptureMs, lockMs, pursuitMs, hops, hopMs, onTarget, onProgress, onDone });
     this.points = []; this.index = -1; this.done = false;
     this.phase = 'dots'; this.pursuit = null; this.hop = null;
   }
@@ -73,24 +76,26 @@ export class CalibrationSession {
     if (this.done || this.index < 0) return;
     if (this.phase === 'pursuit') return this.pushPursuit(frame);
     if (this.phase === 'hops') return this.pushHop(frame);
+    if (this.lockedUntil !== undefined) { // captured: hold the dot briefly so the player sees it lock
+      if (frame.t >= this.lockedUntil) { this.lockedUntil = undefined; this.next(); }
+      return;
+    }
     if (this.shownAt === null) this.shownAt = frame.t;
     const elapsed = frame.t - this.shownAt - this.settleMs;
-    if (elapsed < 0) return; // eyes are still travelling to the dot
+    if (elapsed < 0) return void this.onProgress?.(0, { stage: 'seeking', steadiness: 0 }); // eyes travelling
 
     if (frame.face && !frame.blink && frame.f) {
       this.buf.push(frame.f);
       if (this.buf.length > this.minSamples) this.buf.shift();
     }
     const fill = this.buf.length / this.minSamples;
-    if (fill >= 0.5) {
-      const steadiness = steadinessOf(this.buf);
-      if (!this.best || steadiness * fill > this.best.rank) this.best = { samples: [...this.buf], steadiness, rank: steadiness * fill };
-      if (fill >= 1 && steadiness >= this.steadyBar) return this.finish({ samples: [...this.buf], steadiness, weak: false });
-      this.onProgress?.(Math.min(0.95, fill * (steadiness / this.steadyBar)));
-    }
+    const steadiness = this.buf.length >= 3 ? steadinessOf(this.buf) : 0;
+    if (fill >= 0.5 && (!this.best || steadiness * fill > this.best.rank)) this.best = { samples: [...this.buf], steadiness, rank: steadiness * fill };
+    if (fill >= 1 && steadiness >= this.steadyBar) return this.finish({ samples: [...this.buf], steadiness, weak: false }, frame.t);
+    this.onProgress?.(Math.min(0.95, fill * Math.min(1, steadiness / this.steadyBar)), { stage: 'capturing', steadiness });
     if (elapsed > this.maxCaptureMs) {
       const b = this.best;
-      this.finish(b ? { samples: b.samples, steadiness: b.steadiness, weak: true } : { samples: [], steadiness: 0, weak: true });
+      this.finish(b ? { samples: b.samples, steadiness: b.steadiness, weak: true } : { samples: [], steadiness: 0, weak: true }, frame.t);
     }
   }
 
@@ -126,10 +131,11 @@ export class CalibrationSession {
     this.onTarget?.(this.target, this.hop.i, { hop: true, phase: 'hops' });
   }
 
-  finish(capture) {
-    this.onProgress?.(1);
+  finish(capture, t) {
+    this.onProgress?.(1, { stage: 'locked', steadiness: capture.steadiness });
     this.points.push({ target: this.target, ...capture });
-    this.next();
+    if (this.lockMs > 0 && t !== undefined) this.lockedUntil = t + this.lockMs;
+    else this.next();
   }
 
   /** Stop early; points captured so far are kept. */

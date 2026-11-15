@@ -6,7 +6,7 @@ below is additive: nothing the game uses today was renamed or removed.
 
 ## 1. Calibration changes you will notice
 
-Since v0.3 a full calibration has three phases, about 40 seconds in all:
+Since v0.3 a full calibration has three phases, about 45 seconds in all:
 
 | Phase | What the player does | `onTarget(target, index, total, info)` |
 |---|---|---|
@@ -25,6 +25,15 @@ can drop or shorten them:
 ```js
 eyes.startCalibration({ quick: true, pursuitMs: 5000, hops: 4 });   // or hops: 0
 ```
+
+**Make the dots feel tracked, not timed.** Each dot now captures 24 frames (was 18) and
+holds a 0.3 s "locked" moment before moving on. `onProgress(p, info)` gets a second
+argument during the dots: `info.stage` is `'seeking'` (eyes still travelling), `'capturing'`
+(p rises with steadiness and drops when the eyes wobble) or `'locked'`, and
+`info.steadiness` is 0-1. The built-in screen uses it for a spinning ring while seeking, a
+reticle that tightens as the eyes steady, a "hold steady" hint, and a green lock with a
+burst. If you draw your own dots, using `info.stage` and `info.steadiness` the same way is
+what stops calibration looking like a timer.
 
 **Cancel a calibration** with `eyes.cancelCalibration()` instead of
 `eyes.debug.engine.session?.abort()` (same effect, public and stable).
@@ -82,9 +91,10 @@ If you would rather not maintain your own:
 
 - `runFaceCheck(eyes)` → full-screen face check, continues by itself after 1.5 s all-green.
 - `startCalibration()` without `onTarget` → the built-in calibration screen: lane grid,
-  glowing dot with capture ring, particle burst and cell flash on each capture, comet trail
-  while following, phase header (Hold / Follow / Jump), and a live mini face view that
-  warns when the face is lost.
+  glowing dot with seeking ring, steadiness reticle and capture ring, a green lock with
+  particle burst and cell flash on each capture, comet trail while following, phase header
+  (Hold / Follow / Jump), and a live mini face view (no oval or text) that warns when the
+  face is lost.
 - `showCalibrationResult(result, { layout })` → score counts up in a ring, then the 4 x 2
   cells light up with their own scores and weak cells are marked. Resolves
   `'continue' | 'retry' | 'topup'` (Enter / R / T or click). These screens are keyboard and

@@ -72,7 +72,8 @@ export function buildController(source, options = {}) {
      *          hops    - number of top/bottom band hops at the end (default 8, 1.2 s each, 0 = none)
      *          targets - your own [{x, y}] list
      *          area    - element the dots are drawn over (default: the whole page)
-     *          onTarget(target | null, index, total, info), onProgress(0-1) - draw the dots yourself;
+     *          onTarget(target | null, index, total, info), onProgress(0-1, { stage, steadiness }) - draw the dots yourself;
+     *                    stage is 'seeking' / 'capturing' / 'locked' during the dots (see calibration/session.js);
      *                    info.phase is 'dots', 'pursuit' (info.moving, called every frame) or
      *                    'hops' (info.hop; index / total then count the hops)
      */
@@ -96,7 +97,7 @@ export function buildController(source, options = {}) {
           targets, pursuitMs, hops, ...opts.capture,
           // during the hops, index / total count the hops ("3 / 8"), not the dots
           onTarget: (target, index, info) => { ui.show(target, index, info?.hop ? hops.length : targets.length, info); source.lookAt?.(target); },
-          onProgress: p => ui.progress(p),
+          onProgress: (p, info) => ui.progress(p, info),
           onDone: (points, info) => {
             session = engine.session = null;
             ui.destroy();

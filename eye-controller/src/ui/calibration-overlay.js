@@ -1,7 +1,9 @@
 // Default calibration screen, used when startCalibration() gets no onTarget of its own.
-// Shows the game's lane grid, a glowing dot with a filling ring, a burst when a dot is
-// captured, a comet trail while following, the three phases with overall progress, and a
-// live mini face view so the player sees at once if tracking drops. Escape cancels.
+// Shows the game's lane grid and a glowing dot that visibly tracks the player's eyes:
+// a spinning dashed ring while the eyes travel to it, then a reticle that tightens as the
+// eyes steady (and loosens, with a "hold steady" hint, when they wobble) while the ring
+// fills, then a green lock with a burst. Also a comet trail while following, the three
+// phases, and a live mini face view so the player sees at once if tracking drops. Escape cancels.
 import { createFaceView } from './face-view.js';
 import { DEFAULT_LAYOUT } from '../signals/lanes.js';
 
@@ -24,12 +26,12 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
     const mini = document.createElement('canvas');
     mini.style.cssText = 'position:absolute;inset:auto 16px 16px auto;width:240px;height:135px;border-radius:10px;border:1px solid rgba(77,225,255,.35)';
     root.append(mini);
-    face = createFaceView(eyes, mini, { eyes: false, lanes: false });
+    face = createFaceView(eyes, mini, { eyes: false, lanes: false, oval: false, labels: false });
   }
   area.append(root);
   const g = canvas.getContext('2d');
 
-  const st = { target: null, shown: { x: 0.5, y: 0.5 }, index: 0, total: 1, phase: 'dots', progress: 0, trail: [], bursts: [], flashes: [], phaseDone: {} };
+  const st = { target: null, shown: { x: 0.5, y: 0.5 }, index: 0, total: 1, phase: 'dots', progress: 0, ring: 0, stage: 'seeking', steady: 0, steadyShown: 0, stageSince: 0, trail: [], bursts: [], flashes: [], phaseDone: {} };
   const onKey = e => { if (e.key === 'Escape') onCancel(); };
   addEventListener('keydown', onKey);
   let raf = requestAnimationFrame(function loop(now) { render(now); raf = requestAnimationFrame(loop); });
@@ -61,9 +63,11 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
       if (phase !== st.phase) st.phaseDone[st.phase] = true;
       const jumped = !st.target || phase !== 'pursuit';
       Object.assign(st, { target, index, total, phase });
-      if (jumped) st.progress = 0;
+      if (jumped) Object.assign(st, { progress: 0, ring: 0, stage: 'seeking', steady: 0, stageSince: performance.now() });
     },
-    progress(p) {
+    progress(p, info) {
+      if (info?.stage && info.stage !== st.stage) { st.stage = info.stage; st.stageSince = performance.now(); }
+      if (info) st.steady = info.steadiness ?? st.steady;
       if (p >= 1 && st.progress < 1 && st.phase !== 'pursuit' && st.target) {
         st.bursts.push({ x: st.shown.x, y: st.shown.y, t: performance.now() });     // captured!
         st.flashes.push({ x: st.target.x, y: st.target.y, t: performance.now() });
@@ -87,17 +91,41 @@ function drawGrid(g, W, H, { lanes, bandSplit }, st, now) {
 }
 
 function drawDot(g, x, y, s, st, now) {
-  const pulse = 1 + 0.12 * Math.sin(now / 180), r = 26 * s;
+  const r = 26 * s, locked = st.stage === 'locked' || st.progress >= 1;
+  // ease the ring and the steadiness so they glide (and visibly drain) instead of stepping
+  st.ring += (st.progress - st.ring) * 0.2; st.steadyShown += (st.steady - st.steadyShown) * 0.15;
+  const pop = locked ? 1 + 0.25 * Math.max(0, 1 - (now - st.stageSince) / 250) : 1, pulse = 1 + 0.1 * Math.sin(now / 180);
   const halo = g.createRadialGradient(x, y, 0, x, y, r * 2.6 * pulse);
-  halo.addColorStop(0, `rgba(${COLORS.glow},0.45)`); halo.addColorStop(1, `rgba(${COLORS.glow},0)`);
+  halo.addColorStop(0, locked ? 'rgba(57,255,176,0.45)' : `rgba(${COLORS.glow},0.4)`); halo.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = halo; g.beginPath(); g.arc(x, y, r * 2.6 * pulse, 0, 7); g.fill();
-  if (st.phase !== 'pursuit') { // capture ring
+
+  if (st.phase === 'dots' && st.stage === 'seeking') {        // eyes still travelling: searching ring
+    g.setLineDash([6 * s, 8 * s]); g.lineDashOffset = -now / 25;
+    g.strokeStyle = 'rgba(232,236,255,0.55)'; g.lineWidth = 3 * s; g.beginPath(); g.arc(x, y, r * 1.35, 0, 7); g.stroke();
+    g.setLineDash([]);
+  } else if (st.phase !== 'pursuit') {
+    if (st.phase === 'dots') drawReticle(g, x, y, r, s, locked ? 1 : st.steadyShown, now);
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 6 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
-    g.strokeStyle = st.progress >= 1 ? COLORS.ok : COLORS.ring; g.lineCap = 'round';
-    g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.progress)); g.stroke(); g.lineCap = 'butt';
+    g.strokeStyle = locked ? COLORS.ok : COLORS.ring; g.lineCap = 'round';
+    g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, locked ? 1 : st.ring)); g.stroke(); g.lineCap = 'butt';
+    if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
   }
-  g.fillStyle = COLORS.dot; g.beginPath(); g.arc(x, y, r * 0.5, 0, 7); g.fill();
-  g.fillStyle = COLORS.core; g.beginPath(); g.arc(x, y, r * 0.16, 0, 7); g.fill();
+  g.fillStyle = COLORS.dot; g.beginPath(); g.arc(x, y, r * 0.5 * pop, 0, 7); g.fill();
+  g.fillStyle = locked ? COLORS.ok : COLORS.core; g.beginPath(); g.arc(x, y, r * 0.16 * pop, 0, 7); g.fill();
+}
+
+/** Four ticks around the dot: wide and shaky while the eyes wander, closing in as they steady. */
+function drawReticle(g, x, y, r, s, steady, now) {
+  const k = Math.max(0, Math.min(1, steady)), gap = r * (1.3 + 1.1 * (1 - k)), jitter = (1 - k) * 5 * s, len = 9 * s;
+  const red = Math.round(255 - 198 * k), green = Math.round(211 + 44 * k), blue = Math.round(77 + 99 * k);
+  g.strokeStyle = `rgba(${red},${green},${blue},0.9)`; g.lineWidth = 2.5 * s;
+  g.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4, jx = Math.sin(now / 60 + i * 2) * jitter, jy = Math.cos(now / 70 + i * 3) * jitter;
+    const cx = x + Math.cos(a) * gap + jx, cy = y + Math.sin(a) * gap + jy;
+    g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+  }
+  g.stroke();
 }
 
 function drawBursts(g, st, now, s) {

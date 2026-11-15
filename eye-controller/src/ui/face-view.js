@@ -19,9 +19,11 @@ const C = { ok: '#39ffb0', info: '#4de1ff', warn: '#ffd34d', bad: '#ff4d6d', dim
  *                 mesh    'full' (whole mesh), 'contours' (default), or false
  *                 eyes    eye close-ups (default true)    checks  checklist (default false)
  *                 lanes   mini lane map (default true)    auto    redraw every frame by itself (default true)
+ *                 oval    oval guide (default true)       labels  text on the image (default true); turn both
+ *                         off for a small thumbnail
  */
 export function createFaceView(eyes, canvas, options = {}) {
-  const opt = { video: true, image: 'raw', mesh: 'contours', eyes: true, checks: false, lanes: true, auto: true, ...options };
+  const opt = { video: true, image: 'raw', mesh: 'contours', eyes: true, checks: false, lanes: true, auto: true, oval: true, labels: true, ...options };
   const g = canvas.getContext('2d');
   let raf = 0, dead = false;
 
@@ -44,12 +46,12 @@ export function createFaceView(eyes, canvas, options = {}) {
     if (opt.video && (processed || data.video?.videoWidth)) {
       g.save(); g.translate(fit.x + fit.w, fit.y); g.scale(-1, 1);
       g.globalAlpha = 0.85; g.drawImage(src, 0, 0, fit.w, fit.h); g.restore();
-      if (processed) label(g, autoLabel(data), fit.x + 12 * s, fit.y + 22 * s, 11 * s, C.text);
-    } else if (!data.video) label(g, 'SIMULATED EYES: no camera image', fit.x + 12 * s, fit.y + 22 * s, 12 * s, C.dim);
+      if (processed && opt.labels) label(g, autoLabel(data), fit.x + 12 * s, fit.y + 22 * s, 11 * s, C.text);
+    } else if (!data.video && opt.labels) label(g, 'SIMULATED EYES: no camera image', fit.x + 12 * s, fit.y + 22 * s, 12 * s, C.dim);
 
     // oval guide where the face should sit in the camera frame (not in the processed view: it is
     // already zoomed onto the face, so the oval would always look lined up)
-    if (!processed) {
+    if (!processed && opt.oval) {
       g.setLineDash([12 * s, 10 * s]); g.lineWidth = 3 * s; g.strokeStyle = ok ? C.ok : 'rgba(255,255,255,0.6)';
       g.beginPath(); g.ellipse(fit.x + fit.w / 2, fit.y + fit.h / 2, fit.w * 0.16, fit.h * 0.36, 0, 0, 7); g.stroke(); g.setLineDash([]);
     }
@@ -57,9 +59,9 @@ export function createFaceView(eyes, canvas, options = {}) {
     if (fr?.face) {
       if (data.landmarks && data.mesh && opt.mesh) drawMesh(g, data, P, s, opt.mesh);
       else stylisedFace(g, fr, P, s);
-      drawBox(g, fr, P, s, ok, data.conditions, eyes.state.calibrationScore);
+      drawBox(g, fr, P, s, ok, data.conditions, opt.labels);
       if (data.landmarks) drawHeadDirection(g, fr, data.landmarks, P, s);
-    } else label(g, 'NO FACE', fit.x + fit.w / 2, fit.y + fit.h / 2, 28 * s, C.bad, 'center');
+    } else label(g, 'NO FACE', fit.x + fit.w / 2, fit.y + fit.h / 2, (opt.labels ? 28 : 14) * s, C.bad, 'center');
 
     if (opt.eyes && data.eyeImages && fr?.face) drawEyeCloseUps(g, data, fr, fit, s);
     if (opt.lanes) drawLaneMap(g, eyes, fit, s);
@@ -111,7 +113,7 @@ const FACTOR_NAMES = { light: 'light', glare: 'glare', pupil: 'eye contrast', fr
  * contrast, framing, head position right now; the weakest one is named when it drags the
  * score down). Calibration accuracy is separate: it is shown on the lane map.
  */
-function drawBox(g, fr, P, s, ok, conditions, calibrationScore) {
+function drawBox(g, fr, P, s, ok, conditions, labels = true) {
   const b = fr.box, [x0, y0] = P(b.x + b.w, b.y), [x1, y1] = P(b.x, b.y + b.h), k = Math.min(x1 - x0, y1 - y0) * 0.18;
   g.strokeStyle = ok ? C.ok : C.info; g.lineWidth = 2 * s;
   g.beginPath();
@@ -122,6 +124,7 @@ function drawBox(g, fr, P, s, ok, conditions, calibrationScore) {
   const pct = Math.round((conditions?.score ?? 0) * 100), col = pct >= 75 ? C.ok : pct >= 45 ? C.warn : C.bad;
   const worst = Object.entries(conditions?.factors ?? {}).sort((a, b) => a[1] - b[1])[0];
   const why = pct < 75 && worst && worst[1] < 0.9 ? ` · ${FACTOR_NAMES[worst[0]] ?? worst[0]}` : '';
+  if (!labels) return;
   label(g, `CONDITIONS ${pct}%${why}`, x0, y0 - 8 * s, 12 * s, col);
   g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(x0, y1 + 6 * s, x1 - x0, 4 * s);
   g.fillStyle = col; g.fillRect(x0, y1 + 6 * s, ((x1 - x0) * pct) / 100, 4 * s);
