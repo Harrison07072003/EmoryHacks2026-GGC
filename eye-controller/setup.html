@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Setup Tester</title>
+  <style>
+    :root { --bg: #07070d; --panel: #12121e; --text: #e8ecff; --dim: #9aa0b8; --ok: #39ffb0; --warn: #ffd34d; --bad: #ff4d6d; --accent: #4de1ff; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 15px system-ui, sans-serif; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .stage { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+    .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #8fa; margin: 16px 0 6px; }
+    .score { display: flex; align-items: center; gap: 14px; background: var(--panel); border-radius: 10px; padding: 12px; }
+    .score b { font-size: 46px; line-height: 1; min-width: 70px; text-align: center; }
+    .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .checks li { background: var(--panel); border-radius: 8px; padding: 8px 10px; border-left: 4px solid var(--dim); }
+    .checks li.good { border-color: var(--ok); } .checks li.ok { border-color: var(--warn); } .checks li.bad { border-color: var(--bad); }
+    .checks .v { float: right; color: var(--dim); }
+    .checks .a { display: block; color: var(--dim); font-size: 13px; margin-top: 3px; }
+    button { font: inherit; color: var(--text); background: #1a1a2a; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; margin: 0 6px 6px 0; }
+    button.primary { background: #1f5f78; font-weight: 600; }
+    label { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; margin: 5px 0; color: var(--dim); }
+    select, input { font: inherit; color: var(--text); background: #1a1a2a; border: 1px solid #445; border-radius: 6px; padding: 5px 8px; }
+    pre { white-space: pre-wrap; background: var(--panel); border-radius: 8px; padding: 10px; margin: 8px 0 0; min-height: 1em; }
+    .hint { color: var(--dim); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <h1>Setup tester</h1>
+      <p class="hint">Finds the best seat, camera and screen angle for eye tracking. Fix the red and yellow rows, then run the 6-second range test: it measures how far your eyes visibly move across the screen, the biggest single factor in how well the game tracks you.</p>
+      <div class="stage"><canvas id="face"></canvas></div>
+      <pre id="out">starting camera…</pre>
+    </section>
+    <aside>
+      <div class="score"><b id="score">–</b><div id="scoreText" class="hint">Run the range test for a full score.</div></div>
+      <h2>Right now</h2>
+      <ul class="checks" id="checks"></ul>
+      <h2>Tests</h2>
+      <button id="range" class="primary">Range test (6 s)</button>
+      <button id="run">Calibrate + test run (~95 s)</button>
+      <h2>Describe this setup, then save</h2>
+      <label>Player <input id="player" placeholder="e.g. jon"></label>
+      <label>Distance <select id="distance"><option>normal</option><option>closer</option><option>much closer</option><option>further</option></select></label>
+      <label>Camera <select id="camera"><option>laptop on desk</option><option>laptop raised</option><option>webcam on monitor</option><option>webcam below screen</option></select></label>
+      <label>Screen tilt <select id="tilt"><option>upright</option><option>tilted back</option><option>tilted forward</option></select></label>
+      <label>Glasses <select id="glasses"><option>no</option><option>yes</option></select></label>
+      <label>Note <input id="note" placeholder="optional"></label>
+      <button id="save">Save setup</button>
+      <p class="hint">Setups save to <code>setups/</code>, test runs to <code>recordings/</code> (linked to the setup). <code>npm run setups</code> compares them. Add <code>?mock</code> to try without a camera.</p>
+    </aside>
+  </main>
+  <script type="module" src="/harness/setup.js"></script>
+</body>
+</html>

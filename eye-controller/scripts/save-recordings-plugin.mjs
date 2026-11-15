@@ -2,6 +2,7 @@
 // the browser's Downloads folder. Not part of the production build.
 //   POST /__save/recordings?name=label  -> recordings/<label>_<date-time>.json
 //   POST /__save/baselines?name=label   -> baselines/<label>_<date-time>.json
+//   POST /__save/setups?name=label      -> setups/<label>_<date-time>.json (setup tester)
 //   GET  /__save/recordings             -> { files: [...] }
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,6 +14,7 @@ const MAX_BYTES = 50e6;
 const KINDS = {
   recordings: data => Array.isArray(data.frames),
   baselines: data => typeof data.players === 'number' && !!data.gram,
+  setups: data => data.kind === 'setup',
 };
 
 /** Label -> safe file name. Shared with the debug page so its checklist matches saved files. */

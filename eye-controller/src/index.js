@@ -20,6 +20,7 @@ export { createCalibrationOverlay } from './ui/calibration-overlay.js';
 export { showCalibrationResult, cellScores } from './ui/score-reveal.js';
 export { positionChecks, positionOk, POSITION } from './signals/position.js';
 export { THEMES, resolveTheme } from './ui/theme.js';
+export { measureSetup, setupChecks, setupScore, rangeFromHolds, rangeAdvice, SETUP } from './setup/setup-score.js';
 export { VERSIONS } from './version.js';
 export { evaluateRecording } from './simulator/evaluate.js';
 export { evaluatePlay } from './simulator/evaluate-play.js';

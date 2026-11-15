@@ -41,6 +41,11 @@ Tune against real recordings, not guesses: record on `debug.html`, score with `n
 change one thing, re-score. Thresholds in `src/calibration/scoring.js`, `src/signals/quality.js`
 and `src/smoothing/gaze-smoother.js` are first estimates and are expected to move.
 
+## Setup (seat / camera / screen)
+Accuracy depends most on how far the eyes visibly move across the screen (sit closer; glasses
+halve it). `setup.html` + `src/setup/setup-score.js` measure it; `npm run setups` compares saved
+setups and their linked test runs. Validate thresholds there before changing the game's face check.
+
 ## Known open items
 - Vertical (top/bottom band) accuracy on real faces is the biggest risk. Measured on one player
   (2026-11-15): band switches on target ~60% with glasses, ~85% without; lane jumps ~75% / ~95%.
