@@ -1,0 +1,20 @@
+# Local Typesense for the Online Library (song search).
+#   cd game && cp .env.example .env   # set TYPESENSE_ADMIN_API_KEY
+#   docker compose up -d typesense
+# Data lives in the named volume `typesense-data` (docker volume inspect game_typesense-data).
+services:
+  typesense:
+    image: typesense/typesense:30.2
+    restart: unless-stopped
+    ports:
+      - "${TYPESENSE_PORT:-8108}:8108"
+    volumes:
+      - typesense-data:/data
+    command: >
+      --data-dir /data
+      --api-key ${TYPESENSE_ADMIN_API_KEY:?set TYPESENSE_ADMIN_API_KEY in game/.env}
+      --enable-cors
+    # health: curl -s http://localhost:8108/health  (from the host; npm run typesense:setup checks it too)
+
+volumes:
+  typesense-data:

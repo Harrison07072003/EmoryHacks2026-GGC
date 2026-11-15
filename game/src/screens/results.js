@@ -4,6 +4,7 @@ import { judgmentCount } from '../gameplay/chart.js';
 import { accuracyOf, gradeOf } from '../gameplay/scoring.js';
 import { VERSIONS } from '../../../eye-controller/src/index.js';
 import { startSong } from './songs.js';
+import { songById } from '../songs/index.js';
 import { esc, gazeButton, html } from './ui.js';
 
 /** Turn the end-of-song state into one flat result row (this is what the database stores). */
@@ -43,7 +44,7 @@ export default function results(root, app, { result }) {
           ${result.practice ? `<div class="hint" style="max-width:260px">${PRACTICE_NOTE[result.grade]}</div>` : ''}
           ${failed ? `<div class="hint">Made it ${result.completed_pct}% of the way</div>` : ''}</div>
         <dl class="stats">
-          <dt>Song</dt><dd>${esc(result.song_title)}</dd>
+          <dt>Song</dt><dd>${esc(result.song_title)}</dd>${songById(result.song_id)?.attribution ? `<dt>Credit</dt><dd class="hud-attr">${esc(songById(result.song_id).attribution)}</dd>` : ''}
           <dt>Difficulty</dt><dd>${esc(result.mode_label)}</dd>
           <dt>Score</dt><dd>${result.score.toLocaleString()}</dd>
           <dt>Accuracy</dt><dd>${result.accuracy}%</dd>

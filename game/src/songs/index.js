@@ -2,6 +2,7 @@
 // folder (song.json + audio + chart.<difficulty>.json) and it appears in the menu.
 // See docs/CHARTS.md for the file formats.
 import { parseChart } from '../gameplay/chart.js';
+import { onlineSongById } from '../online/registry.js';
 
 const metas = import.meta.glob('./*/song.json', { eager: true, import: 'default' });
 const charts = import.meta.glob('./*/chart.*.json', { import: 'default' });
@@ -19,10 +20,15 @@ export const SONGS = Object.entries(metas)
   })
   .sort((a, b) => ((ORDER.indexOf(a.id) + 1 || 99) - (ORDER.indexOf(b.id) + 1 || 99)) || a.id.localeCompare(b.id));
 
-export const songById = id => SONGS.find(s => s.id === id);
+/** Built-in songs first; otherwise a generated Online Library level (src/online/registry.js). */
+export const songById = id => SONGS.find(s => s.id === id) ?? onlineSongById(id);
 
 /** Load and validate the chart for a song and difficulty. */
 export async function loadChart(song, difficulty) {
+  if (song.online) {   // generated level: charts are held in memory, validated the same way
+    if (!song.charts?.[difficulty]) throw new Error(`No ${difficulty} chart for ${song.title}`);
+    return parseChart(song.charts[difficulty]);
+  }
   const loader = charts[`./${song.folder}/chart.${difficulty}.json`];
   if (!loader) throw new Error(`No ${difficulty} chart for ${song.title}`);
   return parseChart(await loader());

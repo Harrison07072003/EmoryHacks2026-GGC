@@ -94,3 +94,12 @@ instead, or save the edited chart and stop regenerating that song.
    format: detect onsets and pitch offline, feed them to `chartgen.mjs` as events
    (`{ t, dur, midi, role, accent }`), and nothing in the game changes.
 4. `npm run check-charts`, then play it in `?input=mouse` to check the feel.
+
+## Generated levels (Online Library)
+
+Archive songs found through the in-game Search get levels made automatically from the first
+30 s of their audio by `src/services/chartgen/`, which feeds detected onsets and pitches to
+`tools/compose/chartgen.mjs` as events, as described above. They are written in this same
+format 1, checked against the same rules as `npm run check-charts`, and kept separate from
+`src/songs/`: in memory in the game and in `online-library/charts/` on the server. See the
+README section "Online Library".

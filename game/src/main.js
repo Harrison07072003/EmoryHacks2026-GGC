@@ -13,15 +13,18 @@ import { closePopups, toast } from './screens/ui.js';
 import title from './screens/title.js';
 import calibration from './screens/calibration.js';
 import modes from './screens/modes.js';
-import characters from './screens/characters.js';
 import songs from './screens/songs.js';
 import play from './screens/play.js';
 import results from './screens/results.js';
 import settingsScreen from './screens/settings.js';
 import startupError from './screens/startup-error.js';
 import faceCheck from './screens/face-check.js';
+import onlineSearch from './screens/online-search.js';
+import onlineKeyboard from './screens/online-keyboard.js';
+import onlineResults from './screens/online-results.js';
+import onlinePrepare from './screens/online-prepare.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck };
+const SCREENS = { title, calibration, modes, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults, onlinePrepare };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';
@@ -38,12 +41,15 @@ store.flushOutbox().catch(() => {});
 
 const root = document.getElementById('app');
 let current = null, currentName = null;
+const screenListeners = new Set();
 
 const app = {
   gaze, dwell, audio, sfx, music, store, settings,
   session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false, failedCalibrations: 0 },
   saveSettings() { saveSettings(settings); audio.setVolumes(settings); },
   toast,
+  /** Called with each new screen name (the Online Library uses it to drop levels after a stage). */
+  onScreen(fn) { screenListeners.add(fn); return () => screenListeners.delete(fn); },
   get screen() { return currentName; },
   /** Switch screen. Unmounts the current one first; any music it left playing is stopped. */
   go(name, screenParams = {}) {
@@ -52,6 +58,7 @@ const app = {
     root.replaceChildren();
     dwell.reset();
     currentName = name;
+    screenListeners.forEach(f => f(name));
     current = SCREENS[name](root, app, screenParams) ?? {};
   },
 };

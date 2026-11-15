@@ -1,0 +1,17 @@
+{
+  "_readme": "What counts as a SONG for the Online Library: music with a beat that can become a playable level. 'excludeTags': archive tags/genres/collections that mean 'not music' (whole tag or whole words inside a tag, case-insensitive); such items are skipped without downloading. 'audio': thresholds for the analysis of the first 30 s (the part the level uses). pulseContrast = how clearly the hits repeat at one beat period (0 none .. 1 metronome); measured on real archive audio, spoken word / drones / choral music scored <= 0.11, beat-driven music >= 0.40. Changing 'audio' needs a re-ingest (npm run ingest -- --restart) to re-check indexed songs.",
+  "excludeTags": [
+    "spoken word", "spoken-word", "spokenword", "poetry", "poem", "poems", "audiobook", "audio book", "audiobooks",
+    "podcast", "podcasts", "lecture", "lectures", "interview", "interviews", "speech", "speeches", "sermon", "sermons",
+    "talk", "talks", "radio show", "radio drama", "radio play", "audio drama", "storytelling", "story", "stories",
+    "reading", "readings", "conceptual writing", "literature", "comedy", "stand-up",
+    "field recording", "field recordings", "found sound", "found sounds", "sound effects", "sound effect", "sfx",
+    "soundscape", "soundscapes", "nature sounds", "white noise", "asmr", "meditation", "guided meditation", "hypnosis",
+    "drone", "drones", "silence", "test tone", "sound art", "sound collage", "radio", "phonography"
+  ],
+  "audio": {
+    "minPulseContrast": 0.3,
+    "minOnsetsPerSec": 1.0,
+    "minActivity": 0.6
+  }
+}

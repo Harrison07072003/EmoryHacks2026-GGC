@@ -25,7 +25,7 @@ import { esc, gazeButton, html, popup } from './ui.js';
 export default function play(root, app) {
   const song = songById(app.session.songId), mode = MODES[app.session.modeId];
   if (!song || !mode) { queueMicrotask(() => app.go('songs')); return {}; }
-  const character = CHARACTERS[app.session.characterId] ?? CHARACTERS[mode.characterId];
+  const character = CHARACTERS[mode.characterId];
   const { audio, music, sfx, gaze } = app;
   const pal = song.palette;
 
@@ -33,7 +33,7 @@ export default function play(root, app) {
     <section class="play" data-danger="0" style="--song-bg1:${pal.bg1};--song-bg2:${pal.bg2};--song-lane:${pal.lane};--song-accent:${pal.accent}">
       <canvas></canvas>
       <div class="danger-vignette"></div>
-      <div class="hud-song"><b>${esc(song.title)}</b>${esc(mode.label)}</div>
+      <div class="hud-song"><b>${esc(song.title)}</b>${esc(mode.label)}${song.attribution ? `<small class="hud-attr">${esc(song.attribution)}</small>` : ''}</div>
       <div class="hud-top"><div class="hud-score">0</div><div class="hud-combo"></div></div>
       <div class="danger-label">DANGER</div>
       <div class="frenzy-banner"><b>FRENZY</b><small>DOUBLE POINTS · NO DAMAGE</small><div class="timer"><i></i></div></div>
@@ -47,8 +47,7 @@ export default function play(root, app) {
   const portrait = mountPortrait(el, character);
   portrait.classList.add('character');
   const stopBlink = startBlinking(portrait);
-  el.appendChild(gazeButton('Pause', () => pause(), { cls: 'purple small pause-btn' }));
-  el.appendChild(gazeButton('Quit', () => confirmQuit(), { cls: 'danger small quit-btn', sound: 'back' }));
+  el.appendChild(gazeButton('❚❚ Pause', () => pause(), { cls: 'purple small pause-btn' }));
 
   let state = 'loading', chart, judge, scoring, highway, buffer = null, stats, telemetry = null;
   let clock = null, faceLostSince = null, driftSince = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
@@ -126,9 +125,7 @@ export default function play(root, app) {
       text: reason || `${esc(song.title)} · ${esc(mode.label)}`,
       buttons: [
         { label: 'Resume', onPress: resume },
-        ...(canRecalibrate() ? [{ label: 'Quick recalibrate', cls: 'purple', onPress: recalibrateAndResume }] : []),
-        { label: 'Songs', cls: 'purple', sound: 'back', onPress: () => app.go('songs') },
-        { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
+        { label: 'Quit', cls: 'danger', sound: 'back', onPress: () => app.go('songs') },
       ],
     });
   }
@@ -165,19 +162,6 @@ export default function play(root, app) {
     resume();
   }
 
-  function confirmQuit() {
-    if (!halt()) return;
-    popup({
-      title: 'Quit this song?',
-      text: 'Your progress in this song will be lost.',
-      buttons: [
-        { label: 'Keep playing', onPress: resume },
-        { label: 'Song select', cls: 'danger', sound: 'back', onPress: () => app.go('songs') },
-        { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
-      ],
-    });
-  }
-
   // ---- judgments ----
   function onJudgment(j, t) {
     const frenzyBefore = scoring.state.frenzyActive;
@@ -210,7 +194,8 @@ export default function play(root, app) {
     el.classList.remove('frenzy'); portrait.classList.remove('frenzy');
     const result = buildResult({ song, mode, character, scoring: scoring.state, chart, failed, songTime: t, stats: stats.summary(), gaze, settings: app.settings });
     app.session.songsPlayed++;
-    app.store.saveResult(result).catch(e => app.toast(`Result not saved: ${e.message}`));
+    // archive songs are played, not kept: their results are not saved (no "My Songs" yet)
+    if (!song.online) app.store.saveResult(result).catch(e => app.toast(`Result not saved: ${e.message}`));
     setTimeout(() => { if (state !== 'gone') app.go('results', { result }); }, failed ? 1600 : 1400);
   }
   function fail(t) {
@@ -248,7 +233,7 @@ export default function play(root, app) {
         const target = currentTarget(jt);
         gaze.setTarget(target?.point ?? null, target?.note.id ?? null);
         stats.add(target, gaze.gaze, gaze.cell, jt);
-        if (state === 'playing' && judge.isDone() && t > chart.duration + 0.8) { sfx.play('complete'); finishOrFail(false, t); }
+        if (state === 'playing' && judge.isDone() && t > Math.max(chart.duration + 0.8, song.levelEndSec ?? 0)) { sfx.play('complete'); finishOrFail(false, t); }
       }
       // HUD
       const s = scoring.state;

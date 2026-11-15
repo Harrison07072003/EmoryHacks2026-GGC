@@ -3,8 +3,10 @@
 // After an activation: a sound, a flash, a global cooldown, and that control will not fire
 // again until the gaze has left it, so nothing repeats by accident.
 //
-// Any element with [data-gaze] is a target. Activation calls element.click(), so mouse
+// Any element with [data-gaze] is a target; data-dwell-ms / data-dwell-cooldown-ms change its timing. Activation calls element.click(), so mouse
 // clicks and gaze go through exactly the same handler. [disabled] targets never fire.
+// [data-gaze-hover] elements only report hover (e.g. a song card that previews its song)
+// and never activate; a [data-gaze] control on or near them always wins.
 import { DWELL } from '../config/game-config.js';
 
 /** Pure dwell state machine (tested in test/dwell.test.js). */
@@ -15,9 +17,10 @@ export function createDwellCore(cfg = DWELL) {
     get progress() { return progress; },
     /**
      * @param id   key of the target under the gaze, or null
+     * @param timing  optional per-target { activateMs, cooldownMs } (e.g. faster keyboard keys)
      * @returns    the id that activated this step, or null
      */
-    update(id, dtMs, now) {
+    update(id, dtMs, now, { activateMs = cfg.activateMs, cooldownMs = cfg.cooldownMs } = {}) {
       if (spent !== null && id !== spent) spent = null;  // gaze left the control that just fired: re-arm it
       if (id !== current) {
         // drain the old target first; only switch when it has emptied (smooth reversal)
@@ -26,9 +29,9 @@ export function createDwellCore(cfg = DWELL) {
         current = id; progress = 0;
       }
       if (id === null || id === spent || now < cooldownUntil) return null;
-      progress = Math.min(1, progress + dtMs / cfg.activateMs);
+      progress = Math.min(1, progress + dtMs / activateMs);
       if (progress < 1) return null;
-      progress = 0; spent = id; cooldownUntil = now + cfg.cooldownMs;
+      progress = 0; spent = id; cooldownUntil = now + cooldownMs;
       return id;
     },
     reset() { current = null; progress = 0; },
@@ -41,14 +44,9 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
   const pie = ring.querySelector('.pie');
   let last = performance.now(), currentEl = null, enabled = true, hoverListeners = new Set();
 
-  function hit(gaze) {
-    if (!gaze.valid) return null;
-    const px = gaze.x * innerWidth, py = gaze.y * innerHeight;
-    const pad = cfg.hitPadding * innerWidth, sticky = cfg.stickyPadding * innerWidth;
-    // keep the current target while the gaze stays near it (noisy gaze must not flicker)
-    if (currentEl?.isConnected && within(currentEl.getBoundingClientRect(), px, py, sticky)) return currentEl;
+  function nearest(selector, px, py, pad) {
     let best = null, bestD = Infinity;
-    for (const el of document.querySelectorAll('[data-gaze]')) {
+    for (const el of document.querySelectorAll(selector)) {
       if (el.closest('[inert]') || !el.offsetParent) continue;
       const r = el.getBoundingClientRect();
       if (!within(r, px, py, pad)) continue;
@@ -56,6 +54,15 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
       if (d < bestD) { best = el; bestD = d; }
     }
     return best;
+  }
+
+  function hit(gaze) {
+    if (!gaze.valid) return null;
+    const px = gaze.x * innerWidth, py = gaze.y * innerHeight;
+    const pad = cfg.hitPadding * innerWidth, sticky = cfg.stickyPadding * innerWidth;
+    // keep the current control while the gaze stays near it (noisy gaze must not flicker)
+    if (currentEl?.isConnected && currentEl.hasAttribute('data-gaze') && within(currentEl.getBoundingClientRect(), px, py, sticky)) return currentEl;
+    return nearest('[data-gaze]', px, py, pad) ?? nearest('[data-gaze-hover]', px, py, 0);
   }
 
   function setHover(el) {
@@ -73,8 +80,8 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
       const now = performance.now(), dt = Math.min(100, now - last);
       last = now;
       const el = enabled ? hit(gaze) : null;
-      const target = el && !el.disabled && !el.hasAttribute('disabled') ? el : null;
-      const fired = core.update(target, dt, now);
+      const target = el && el.hasAttribute('data-gaze') && !el.disabled && !el.hasAttribute('disabled') ? el : null;
+      const fired = core.update(target, dt, now, timingOf(target));
       const shown = core.current;
       setHover(shown ?? el);
       if (shown) {
@@ -98,6 +105,12 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
     /** Called with the element under the gaze (or null) whenever it changes: song previews use it. */
     onHover(fn) { hoverListeners.add(fn); return () => hoverListeners.delete(fn); },
   };
+}
+
+/** Per-element dwell timing: data-dwell-ms / data-dwell-cooldown-ms override DWELL (keyboard keys use 1 s). */
+function timingOf(el) {
+  const activateMs = Number(el?.dataset?.dwellMs), cooldownMs = Number(el?.dataset?.dwellCooldownMs);
+  return { ...(activateMs > 0 && { activateMs }), ...(cooldownMs >= 0 && el?.dataset?.dwellCooldownMs !== undefined && { cooldownMs }) };
 }
 
 const within = (r, x, y, pad) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;

@@ -1,0 +1,91 @@
+/* Online Library screens (search, keyboard, results). Uses the tokens from theme.css. */
+
+
+
+/* ---- shared: search field, status, notices ---- */
+.os-slot { width: min(900px, 90vw); }
+.os-field {
+  min-height: 84px; padding: 18px 28px; border-radius: var(--radius);
+  border: 2px solid var(--panel-edge); background: rgba(10, 12, 22, 0.85);
+  font: 700 30px var(--font-display); letter-spacing: 0.04em; display: flex; align-items: center; flex-wrap: wrap;
+}
+.os-field.empty::before { content: attr(data-placeholder); color: var(--text-dim); font: 600 22px var(--font-body); }
+.os-interim { color: var(--text-dim); font-style: italic; }
+.os-caret { width: 3px; height: 34px; margin-left: 4px; background: var(--green); animation: os-blink 1s steps(1) infinite; }
+@keyframes os-blink { 50% { opacity: 0; } }
+.os-status { min-height: 1.4em; margin: 0; color: var(--text-dim); font-size: 18px; text-align: center; }
+.os-status.warn { color: var(--danger); }
+.os-notice { display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center; padding: 28px; border-radius: var(--radius); border: 2px dashed var(--panel-edge); color: var(--text-dim); font-size: 20px; }
+.os-notice b { color: var(--text); font: 700 24px var(--font-display); }
+.os-loading { text-align: center; color: var(--text-dim); font-size: 22px; padding: 40px; }
+
+/* mic toggle: the indicator glows while listening */
+.gbtn.os-mic.on { border-color: var(--green); box-shadow: var(--glow-green); }
+.gbtn.os-mic.on::after { content: ''; position: absolute; top: 10px; right: 10px; width: 12px; height: 12px; border-radius: 50%; background: var(--danger); animation: os-pulse 1.2s ease-in-out infinite; }
+@keyframes os-pulse { 50% { transform: scale(1.5); opacity: 0.5; } }
+
+/* ---- screen 2: search ---- */
+.os-options { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; }
+.os-options .gbtn { min-width: 300px; min-height: 120px; font-size: 26px; }
+.gbtn.os-say.on { border-color: var(--green); box-shadow: var(--glow-green); }
+.os-genres b { color: var(--green); font-weight: 700; }
+
+/* ---- screen 3: keyboard (big keys: each one is a gaze target) ---- */
+.online-keyboard { gap: 18px; padding-top: 110px; }
+.os-keys { display: flex; flex-direction: column; gap: 10px; align-items: center; width: min(1200px, 96vw); }
+.os-row { display: flex; gap: 10px; justify-content: center; width: 100%; }
+.gbtn.os-key { min-width: 0; flex: 0 1 calc((100% - 90px) / 10); min-height: clamp(56px, 8.5vh, 86px); padding: 6px; font-size: clamp(18px, 2.2vw, 28px); letter-spacing: 0; }
+.gbtn.os-key.wide { flex-basis: calc((100% - 90px) / 10 * 3); }
+.gbtn.os-key.go { border-color: var(--green); }
+
+/* ---- screen 4: results ---- */
+.online-results { gap: 14px; padding-top: 84px; padding-bottom: 16px; justify-content: flex-start; }
+.online-results .os-field { min-height: 60px; font-size: 24px; padding: 10px 22px; }
+.os-results { display: flex; flex-direction: column; gap: clamp(6px, 1.2vh, 12px); width: min(1100px, 94vw); }
+.os-song {
+  display: grid; grid-template-columns: 56px 1fr minmax(200px, 24%); align-items: stretch; gap: 18px;
+  padding: 10px 10px 10px 18px; border-radius: var(--radius); border: 2px solid var(--panel-edge); background: rgba(14, 17, 28, 0.88);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.os-song.previewing { border-color: var(--purple); box-shadow: var(--glow-purple); }
+.os-num { align-self: center; font: 900 34px var(--font-display); color: var(--purple); text-align: center; }
+.os-info { min-width: 0; align-self: center; }
+.os-title { font: 900 24px var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.os-meta { color: var(--text-dim); font-size: 18px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.os-license { padding: 1px 8px; border-radius: 6px; border: 1px solid var(--green-deep); color: var(--green); font-size: 14px; font-weight: 700; }
+.os-tag { color: var(--purple); font-weight: 700; }
+.os-attr { color: var(--text-dim); font-size: 13px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the Choose area: a 2 s dwell target; the gbtn fill (--dwell) shows progress */
+.gbtn.os-choose { min-width: 0; min-height: clamp(64px, 10vh, 96px); font-size: 24px; border-color: var(--green-deep); }
+.gbtn.os-choose::before { background: linear-gradient(90deg, rgba(57, 255, 176, 0.55), rgba(57, 255, 176, 0.25)); }
+
+.os-ready { color: var(--gold); font-weight: 700; font-size: 15px; }
+
+/* ---- level preparation ---- */
+.op-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; font: 700 24px var(--font-display); }
+.op-steps li { display: flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: var(--radius); border: 2px solid var(--panel-edge); color: var(--text-dim); }
+.op-steps li i { width: 14px; height: 14px; border-radius: 50%; background: var(--gray); }
+.op-steps li.active { color: var(--text); border-color: var(--purple); box-shadow: var(--glow-purple); }
+.op-steps li.active i { background: var(--purple); animation: os-pulse 1s ease-in-out infinite; }
+.op-steps li.done { color: var(--green); border-color: var(--green-deep); }
+.op-steps li.done i { background: var(--green); }
+.op-steps li.failed { color: var(--danger); border-color: var(--danger); }
+.op-steps li.failed i { background: var(--danger); animation: none; }
+.op-note { color: var(--text-dim); margin: 0; font-size: 18px; text-align: center; }
+.op-attr { max-width: 90vw; text-align: center; white-space: normal; }
+.op-actions { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; align-items: center; flex-direction: column; }
+
+/* attribution while playing an archive song, and on its results */
+.hud-attr { display: block; max-width: 46vw; margin-top: 4px; font: 500 12px var(--font-body); color: var(--text-dim); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+dd.hud-attr { max-width: 40vw; white-space: normal; }
+
+/* Corner buttons. In ui.css `.gbtn { position: relative }` comes after `.top-left/.top-right
+   { position: absolute }` with equal specificity, so shared corner buttons end up in the page
+   flow (at the bottom). Pin them on the Online Library screens only; the shared rule is left
+   alone because other screens are laid out around it. */
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-left,
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-right { position: absolute; top: calc(24px + env(safe-area-inset-top, 0px)); z-index: 5; }
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-left { left: 24px; }
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-right { right: 24px; }
+/* song select: the Search entry point sits in the top-right corner */
+.screen > .gbtn.song-search-btn { position: absolute; top: calc(24px + env(safe-area-inset-top, 0px)); right: 24px; z-index: 5; min-width: 200px; }

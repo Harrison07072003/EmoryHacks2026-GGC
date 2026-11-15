@@ -26,7 +26,7 @@ export default function modes(root, app) {
     stops.push(startBlinking(mountPortrait(card, character)));
     card.addEventListener('click', () => {
       app.session.modeId = id;
-      app.session.characterId = app.settings.characterId ?? mode.characterId;
+      app.session.characterId = mode.characterId;
       app.go('songs');
     });
     cards.appendChild(card);

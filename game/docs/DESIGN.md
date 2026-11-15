@@ -16,8 +16,8 @@ number mentioned here lives in `src/config/game-config.js`.
 | Modes: practice (song won't end, no lose), normal & hard (too many misses → song ends) | `failEnabled` per mode. |
 | Danger mode levels 1/2/3 | Level 1: pink/red edge glow. Level 2: darker red with a slow pulse. Level 3: song ends, F. |
 | Mint hair = normal, pink hair = hard, black hair = practice | Each mode brings its character by default. They can be changed on the Character screen. |
-| Menu flow 1st title → 2nd modes + multiplayer (just for show) → 3rd choose song, preview 5-10 s, YES/NO | Implemented as drawn. Multiplayer is a greyed card marked COMING SOON and cannot be selected. |
-| Eyes gleam / glow in Frenzy | The portrait's eyes are their own SVG layer, with a glow and a flare animation in Frenzy. |
+| Menu flow 1st title → 2nd modes + multiplayer (just for show) → 3rd choose song, preview 5-10 s | Multiplayer is a greyed card marked COMING SOON and cannot be selected. Song select (playtest revision): looking at a card only plays its preview; each card ends in a SELECT section, and holding the eyes there starts the song. Cards are spread out so the gaze doesn't land on the wrong one. Each mode has its own character; there is no character picker. |
+| Eyes gleam / glow in Frenzy | Characters use the team artwork (`src/characters/art/`). In Frenzy the whole portrait glows in the character's colour; an `eyesImage` layer would make only the eyes glow. |
 
 **Judgement calls (easy to change):**
 - The straight-note highway is in perspective only **above** the upper line. Below it the
@@ -33,9 +33,9 @@ number mentioned here lives in `src/config/game-config.js`.
 - Before any calibration exists, the gaze cannot press buttons yet. The title screen therefore
   starts calibration by itself once a face has been in view for 3 s (a click also works).
   After calibration everything is gaze-only.
-- Pause and Quit sit in the upper right. Pause offers Resume / Songs / Home. Quit asks before
-  leaving, because a stray 2 s glance should not throw away a run. Resume rewinds 1 s and
-  counts in. The song also auto-pauses after 3 s without a face (`PAUSE` in the config).
+- One Pause button sits in the top-right corner. It freezes the song and opens a popup with
+  Resume / Quit (Quit goes back to song select), so a stray 2 s glance never throws away a run
+  by itself. Resume rewinds 1 s and counts in. The song also auto-pauses after 3 s without a face (`PAUSE` in the config).
 - The face check from the prototype (app/core/shell.js) was rebuilt on the eye-controller's
   frame data (`src/input/face-check.js`, thresholds in `FACE_CHECK`) and runs before every
   calibration.
@@ -108,5 +108,5 @@ one spot misses most segments (tested).
   `bandTolerance`.
 - A "calibration check" at the start of each song (one dot per column, 1 s) could re-anchor
   drift more cheaply than a quick recalibration.
-- Commissioned character art: set `image` on a character; the eyes go on their own layer.
+- An eye-only layer (`eyesImage`) for each character's art, so Frenzy can light up just the eyes.
 - Licensed tracks or automatic chart generation: see `CHARTS.md`.
