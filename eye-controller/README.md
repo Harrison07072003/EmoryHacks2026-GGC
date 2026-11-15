@@ -18,7 +18,8 @@ npm test        # all unit and end-to-end tests, headless, no camera needed
 
 - `/` is **Hello Lanes**, the example harness. It starts on the mock (move the mouse = move
   the eyes). Add `?live` to the URL, or press "Use live webcam", for real tracking.
-- `/debug.html` is the tracker debug page: camera view, eye crops, camera-adjust sliders,
+- `/debug.html` is the tracker debug page: camera view (what the tracker analyses, after
+  auto-exposure and the face-following zoom; press P for the raw camera), eye crops, camera-adjust sliders,
   calibration, session recording, baseline export / import.
 
 ## Requirements

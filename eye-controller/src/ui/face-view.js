@@ -26,8 +26,10 @@ export function createFaceView(eyes, canvas, options = {}) {
   let raf = 0, dead = false;
 
   function draw(now = performance.now()) {
-    const W = (canvas.width = Math.max(1, canvas.clientWidth * devicePixelRatio));
-    const H = (canvas.height = Math.max(1, canvas.clientHeight * devicePixelRatio));
+    // resize only when the CSS size changed (re-allocating the canvas every frame is costly)
+    const W = Math.max(1, Math.round(canvas.clientWidth * devicePixelRatio)), H = Math.max(1, Math.round(canvas.clientHeight * devicePixelRatio));
+    if (canvas.width !== W) canvas.width = W;
+    if (canvas.height !== H) canvas.height = H;
     const s = devicePixelRatio, data = eyes.faceData(), fr = data.frame;
     const checks = positionChecks(fr), ok = positionOk(checks);
     const processed = opt.image === 'processed' && data.processed && data.roi;
@@ -45,9 +47,12 @@ export function createFaceView(eyes, canvas, options = {}) {
       if (processed) label(g, autoLabel(data), fit.x + 12 * s, fit.y + 22 * s, 11 * s, C.text);
     } else if (!data.video) label(g, 'SIMULATED EYES: no camera image', fit.x + 12 * s, fit.y + 22 * s, 12 * s, C.dim);
 
-    // oval guide where the face should sit
-    g.setLineDash([12 * s, 10 * s]); g.lineWidth = 3 * s; g.strokeStyle = ok ? C.ok : 'rgba(255,255,255,0.6)';
-    g.beginPath(); g.ellipse(fit.x + fit.w / 2, fit.y + fit.h / 2, fit.w * 0.16, fit.h * 0.36, 0, 0, 7); g.stroke(); g.setLineDash([]);
+    // oval guide where the face should sit in the camera frame (not in the processed view: it is
+    // already zoomed onto the face, so the oval would always look lined up)
+    if (!processed) {
+      g.setLineDash([12 * s, 10 * s]); g.lineWidth = 3 * s; g.strokeStyle = ok ? C.ok : 'rgba(255,255,255,0.6)';
+      g.beginPath(); g.ellipse(fit.x + fit.w / 2, fit.y + fit.h / 2, fit.w * 0.16, fit.h * 0.36, 0, 0, 7); g.stroke(); g.setLineDash([]);
+    }
 
     if (fr?.face) {
       if (data.landmarks && data.mesh && opt.mesh) drawMesh(g, data, P, s, opt.mesh);

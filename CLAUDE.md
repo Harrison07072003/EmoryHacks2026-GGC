@@ -57,7 +57,8 @@ and `src/smoothing/gaze-smoother.js` are first estimates and are expected to mov
   (top band reads low, bottom is fine), so a single offset fixes one band and breaks the other.
 - v0.4 (2026-11-15): face view (`src/ui/face-view.js`), face check, calibration overlay with
   phases and mini face view, score reveal, `positionChecks` tuned on clips, `faceData()` and
-  `cancelCalibration()`. Live camera rendering of the mesh / eye close-ups not yet seen on a real webcam.
+  `cancelCalibration()`. Seen on a real webcam and approved after toning the mesh down; the face
+  label is CONDITIONS % (live conditions), not `state.quality` (capped at 40 before calibrating).
   Notes for the game team: `eye-controller/docs/GAME-INTEGRATION.md`.
 - The `rhythmeyez-game` branch is the game team's (a Coder commit-attribution workaround):
   read it for intent, never write to it. All our work goes on `main`.
