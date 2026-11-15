@@ -1,5 +1,6 @@
 // Where calibration dots go. All coordinates are normalized 0-1 over the play area.
 import { allCells, cellCenter, DEFAULT_LAYOUT } from '../signals/lanes.js';
+import { rng } from '../util/math.js';
 
 /**
  * Full calibration: every lane centre on three rows (top band, band border, bottom band)
@@ -27,3 +28,16 @@ export function topUpTargets(cells, layout = DEFAULT_LAYOUT) {
 
 export const sameCell = (a, b) => !!a && !!b && a.lane === b.lane && a.band === b.band;
 export { allCells };
+
+/** Band hops for the end of calibration: alternate top / bottom, never the same lane twice. */
+export function hopTargets(count = 8, layout = DEFAULT_LAYOUT, seed = 7) {
+  const rand = rng(seed), out = [];
+  let last = -1;
+  for (let i = 0; i < count; i++) {
+    let lane;
+    do lane = Math.floor(rand() * layout.lanes); while (lane === last);
+    last = lane;
+    out.push(cellCenter({ lane, band: i % 2 ? 'bottom' : 'top' }, layout));
+  }
+  return out;
+}

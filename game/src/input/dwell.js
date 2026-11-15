@@ -5,6 +5,8 @@
 //
 // Any element with [data-gaze] is a target; data-dwell-ms / data-dwell-cooldown-ms change its timing. Activation calls element.click(), so mouse
 // clicks and gaze go through exactly the same handler. [disabled] targets never fire.
+// [data-gaze-hover] elements only report hover (e.g. a song card that previews its song)
+// and never activate; a [data-gaze] control on or near them always wins.
 import { DWELL } from '../config/game-config.js';
 
 /** Pure dwell state machine (tested in test/dwell.test.js). */
@@ -42,14 +44,9 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
   const pie = ring.querySelector('.pie');
   let last = performance.now(), currentEl = null, enabled = true, hoverListeners = new Set();
 
-  function hit(gaze) {
-    if (!gaze.valid) return null;
-    const px = gaze.x * innerWidth, py = gaze.y * innerHeight;
-    const pad = cfg.hitPadding * innerWidth, sticky = cfg.stickyPadding * innerWidth;
-    // keep the current target while the gaze stays near it (noisy gaze must not flicker)
-    if (currentEl?.isConnected && within(currentEl.getBoundingClientRect(), px, py, sticky)) return currentEl;
+  function nearest(selector, px, py, pad) {
     let best = null, bestD = Infinity;
-    for (const el of document.querySelectorAll('[data-gaze]')) {
+    for (const el of document.querySelectorAll(selector)) {
       if (el.closest('[inert]') || !el.offsetParent) continue;
       const r = el.getBoundingClientRect();
       if (!within(r, px, py, pad)) continue;
@@ -57,6 +54,15 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
       if (d < bestD) { best = el; bestD = d; }
     }
     return best;
+  }
+
+  function hit(gaze) {
+    if (!gaze.valid) return null;
+    const px = gaze.x * innerWidth, py = gaze.y * innerHeight;
+    const pad = cfg.hitPadding * innerWidth, sticky = cfg.stickyPadding * innerWidth;
+    // keep the current control while the gaze stays near it (noisy gaze must not flicker)
+    if (currentEl?.isConnected && currentEl.hasAttribute('data-gaze') && within(currentEl.getBoundingClientRect(), px, py, sticky)) return currentEl;
+    return nearest('[data-gaze]', px, py, pad) ?? nearest('[data-gaze-hover]', px, py, 0);
   }
 
   function setHover(el) {
@@ -74,7 +80,7 @@ export function createDwell({ ring, sfx, cfg = DWELL }) {
       const now = performance.now(), dt = Math.min(100, now - last);
       last = now;
       const el = enabled ? hit(gaze) : null;
-      const target = el && !el.disabled && !el.hasAttribute('disabled') ? el : null;
+      const target = el && el.hasAttribute('data-gaze') && !el.disabled && !el.hasAttribute('disabled') ? el : null;
       const fired = core.update(target, dt, now, timingOf(target));
       const shown = core.current;
       setHover(shown ?? el);

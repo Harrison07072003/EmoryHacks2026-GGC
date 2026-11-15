@@ -24,7 +24,7 @@ function score(file) {
     cal: cal.dots >= 12 ? { dots: cal.dots, score: cal.fullScore, 'x err %': pct(cal.errorX), 'y err %': pct(cal.errorY), 'lanes %': pct(cal.laneAccuracy), 'bands %': pct(cal.bandAccuracy) } : null,
     play: play ? {
       'jump hit %': pct(play.jumps?.hitRate), 'jump ms': play.jumps?.reactionMs == null ? null : Math.round(play.jumps.reactionMs), 'jump on %': pct(play.jumps?.onTarget),
-      'path err %': pct(play.path?.errorAtLag), 'path lag ms': play.path?.lagMs ?? null, 'path lane %': pct(play.path?.lane),
+      'path err %': pct(play.path?.errorAtLag), 'path lag ms': play.path?.lagMs ?? null, 'path lane %': pct(play.path?.lane), 'path band %': pct(play.path?.inBand),
       'switch hit %': pct(play.switch?.hitRate), 'switch ms': play.switch?.reactionMs == null ? null : Math.round(play.switch.reactionMs), 'switch on %': pct(play.switch?.onTarget),
     } : null,
     cond: { light: Math.round(c.light), contrast: +c.pupilContrast.toFixed(2), 'glare %': pct(c.glare), fps: Math.round(c.fps) },
@@ -40,7 +40,7 @@ function byCondition(results) {
     condition, clips: rs.length,
     'cal score': avg(rs, r => r.cal?.score), 'y err %': avg(rs, r => r.cal?.['y err %']),
     'jump on %': avg(rs, r => r.play?.['jump on %']), 'switch on %': avg(rs, r => r.play?.['switch on %']),
-    'path lane %': avg(rs, r => r.play?.['path lane %']), light: avg(rs, r => r.cond.light),
+    'path lane %': avg(rs, r => r.play?.['path lane %']), 'path band %': avg(rs, r => r.play?.['path band %']), light: avg(rs, r => r.cond.light),
   }));
   console.log('\nBY CONDITION (averages; "on %" = share of time on the right cell during the test run)');
   console.table(rows);
@@ -69,7 +69,7 @@ if (statSync(target).isDirectory()) {
   table('TEST RUN (replayed through the current code)', results.filter(r => r.play).map(r => ({ clip: r.clip, v: r.version, ...r.play })));
   byCondition(results);
   if (skipped.length) console.log(`\nSkipped: ${skipped.join(', ')}`);
-  const cols = ['dots', 'score', 'x err %', 'y err %', 'lanes %', 'bands %', 'jump hit %', 'jump ms', 'jump on %', 'path err %', 'path lag ms', 'path lane %', 'switch hit %', 'switch ms', 'switch on %', 'light', 'contrast', 'glare %', 'fps'];
+  const cols = ['dots', 'score', 'x err %', 'y err %', 'lanes %', 'bands %', 'jump hit %', 'jump ms', 'jump on %', 'path err %', 'path lag ms', 'path lane %', 'path band %', 'switch hit %', 'switch ms', 'switch on %', 'light', 'contrast', 'glare %', 'fps'];
   const csv = [['clip', 'version', ...cols].join(','), ...results.map(r => { const all = { ...r.cal, ...r.play, ...r.cond }; return [r.clip, r.version, ...cols.map(k => all[k] ?? '')].join(','); })];
   writeFileSync(join(target, 'scores.csv'), csv.join('\n') + '\n');
   console.log(`\nWrote ${join(target, 'scores.csv')}`);

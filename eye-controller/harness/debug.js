@@ -1,6 +1,6 @@
 // Tracker debug page: live camera view, eye crops with pupil / iris markers, the camera
 // adjust sliders, calibration, session recording, and baseline export / import.
-import { VERSIONS, createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
+import { VERSIONS, createFaceView, createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
 import { PROTOCOL } from './protocol.js';
 import { slug } from '../src/util/slug.js';
 
@@ -134,7 +134,14 @@ let message = '';
 const note = m => { message = m; };
 
 // ---- live view ----
-const frame = $('frame'), fg = frame.getContext('2d');
+// camera view with the full face mesh, eye close-ups, head direction and lane map
+let faceView = createFaceView(eyes, $('frame'), { mesh: 'full', checks: true, image: 'processed' });
+// P toggles between what the tracker analyses (auto-exposed, cropped) and the raw camera
+addEventListener('keydown', e => {
+  if (e.key !== 'p' || e.target instanceof HTMLInputElement) return;
+  const image = faceView.image === 'raw' ? 'processed' : 'raw';
+  faceView.destroy(); faceView = createFaceView(eyes, $('frame'), { mesh: 'full', checks: true, image }); faceView.image = image;
+});
 function drawEye(canvas, key) {
   const g = canvas.getContext('2d'), d = cam.debug[key];
   if (!d || !cam.eyeCanvas) return;
@@ -145,10 +152,6 @@ function drawEye(canvas, key) {
 }
 function draw() {
   const s = eyes.state, f = eyes.debug.engine.lastFrame;
-  if (cam.work) {
-    frame.height = Math.round((960 * cam.work.height) / cam.work.width);
-    fg.save(); fg.translate(960, 0); fg.scale(-1, 1); fg.drawImage(cam.work, 0, 0, 960, frame.height); fg.restore(); // mirrored
-  }
   drawEye($('eyeL'), 'L'); drawEye($('eyeR'), 'R');
   Object.assign($('gaze').style, { left: `${s.gaze.x * 100}%`, top: `${s.gaze.y * 100}%`, display: s.calibrationScore === null ? 'none' : 'block' });
   const factors = Object.entries(eyes.debug.qualityFactors()).map(([k, v]) => `${k} ${v.toFixed(2)}`).join('  ');

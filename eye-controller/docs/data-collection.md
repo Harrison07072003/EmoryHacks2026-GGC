@@ -15,7 +15,7 @@ npm run fetch-model
 
 ## One session (about 15 minutes for the first pass)
 
-1. `npm run dev`, open `http://localhost:5173/debug.html` in Chrome, allow the camera.
+1. `npm run dev`, open `http://localhost:5190/debug.html` in Chrome, allow the camera.
 2. Type your **player name** (e.g. `jon`). It is remembered.
 3. The checklist selects the first condition that still needs clips. Click a condition to
    read what to change; set the room up for it.

@@ -47,7 +47,7 @@ function eye(cx, c, side) {
 /** @returns an <svg> element string for the character */
 export function portraitSvg(c) {
   if (c.image) {
-    return `<div class="char-portrait char-${c.id}" style="--eye-glow:${c.eyeGlow}"><img src="${c.image}" alt="${c.name}" style="width:100%">${c.eyesImage ? `<img class="eyes" src="${c.eyesImage}" alt="" style="position:absolute;inset:0;width:100%">` : ''}</div>`;
+    return `<div class="char-portrait char-art char-${c.id}" style="--eye-glow:${c.eyeGlow}"><img src="${c.image}" alt="${c.name}" draggable="false" style="width:${(c.artScale ?? 1) * 100}%">${c.eyesImage ? `<img class="eyes" src="${c.eyesImage}" alt="" style="position:absolute;inset:0;width:100%">` : ''}</div>`;
   }
   const brow = c.hairStyle === 'spiky'
     ? `<path d="M64 98 L90 102 M110 102 L136 98" stroke="${c.hairShade}" stroke-width="5" stroke-linecap="round"/>` : '';

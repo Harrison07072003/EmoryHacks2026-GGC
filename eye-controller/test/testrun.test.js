@@ -113,3 +113,20 @@ describe('scoring a test run', () => {
     expect(evaluatePlay(rec.stop())).toBeNull();
   });
 });
+
+describe('learning during the test run', () => {
+  it('counts a note as hit only once the eyes had time to arrive on the right cell', async () => {
+    const { isHit } = await import('../src/testrun/script.js');
+    const note = { x: 0.375, y: 0.25 };
+    expect(isHit('jumps', 200, { lane: 1, band: 'top' }, note)).toBe(false);
+    expect(isHit('jumps', 500, { lane: 1, band: 'top' }, note)).toBe(true);
+    expect(isHit('jumps', 500, { lane: 2, band: 'top' }, note)).toBe(false);
+    expect(isHit('path', 500, { lane: 3, band: 'bottom' }, { x: 0.1, y: 0.75 })).toBe(true);
+  });
+  it('replay with learning never does worse than without on an attentive player', async () => {
+    const rec = await recordTestRun({ calibrate: true });
+    const on = evaluatePlay(rec).replay, off = evaluatePlay(rec, { learn: false }).replay;
+    expect(on.switch.onTarget).toBeGreaterThanOrEqual(off.switch.onTarget - 0.02);
+    expect(on.jumps.hitRate).toBe(1);
+  });
+});

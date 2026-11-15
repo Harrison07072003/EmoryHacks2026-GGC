@@ -1,29 +1,31 @@
-// Title screen. Before any calibration exists the gaze cannot press buttons yet, so Start
-// also triggers by itself once a face has been steadily in view for a few seconds.
+// Title screen. Every session starts with the face check and a full calibration. Hands-free:
+// AUTO_START_MS after a face is in view it starts by itself, wherever the eyes wander. Only
+// actually pressing a button (dwell or click) stops it, since that leaves this screen.
 import { CHARACTERS, CHARACTER_ORDER } from '../characters/characters.js';
 import { mountPortrait, startBlinking } from '../characters/portrait.js';
 import { gazeButton, html } from './ui.js';
 
-const AUTO_START_MS = 3000;
+const AUTO_START_MS = 10000;
 
 export default function title(root, app) {
   const { gaze } = app;
   const el = html(`
-    <section class="screen">
+    <section class="screen title-screen">
       <div class="logo">RHYTHM<span>EYEZ</span></div>
       <div class="tagline">Play the beat with your eyes</div>
       <div class="status-line"><span data-face></span><span data-cal></span><span data-sound></span></div>
       <div class="row" data-buttons></div>
       <div data-auto style="display:none;text-align:center">
-        <div class="auto-ring" style="margin:0 auto 10px"><span data-count>3</span></div>
-        <div class="hint">Look at the screen and hold still: calibration starts by itself.</div>
+        <div class="auto-ring" style="margin:0 auto 10px"><span data-count>10</span></div>
+        <div class="hint">Calibration starts by itself if you don't choose anything.</div>
       </div>
       <div class="title-chars"></div>
     </section>`);
   root.appendChild(el);
 
+  const needsCalibration = () => !app.session.calibratedThisSession && !!gaze.eyes && !gaze.manualMouse;
   const start = () => {
-    if (!app.session.calibratedThisSession && gaze.eyes) app.go('calibration', { kind: gaze.calibrated ? 'auto' : 'full', next: 'modes' });
+    if (needsCalibration()) app.go('calibration', { kind: 'full', next: 'modes' });
     else app.go('modes');
   };
   const buttons = el.querySelector('[data-buttons]');
@@ -45,14 +47,14 @@ export default function title(root, app) {
       cal.innerHTML = gaze.calibrationScore === null ? (gaze.eyes ? 'not calibrated yet' : '')
         : `calibration <span class="${gaze.calibrationOk ? 'ok' : 'bad'}">${gaze.calibrationScore}/100</span>`;
       sound.innerHTML = app.audio.running ? '' : '<span class="bad">sound starts after one click or key press</span>';
-      // hands-free start: no calibration yet means the eyes cannot press buttons
-      const needsAuto = gaze.eyes && !gaze.calibrated && !gaze.mouseOverride;
+      // hands-free start: calibrates by itself unless a button is pressed first
+      const needsAuto = needsCalibration();
       auto.style.display = needsAuto ? '' : 'none';
       if (!needsAuto) return;
       faceSince = gaze.faceVisible ? (faceSince ?? now) : null;
       const p = faceSince === null ? 0 : (now - faceSince) / AUTO_START_MS;
       ring.style.setProperty('--p', Math.min(1, p).toFixed(3));
-      count.textContent = faceSince === null ? '–' : Math.max(1, Math.ceil(3 - p * 3));
+      count.textContent = faceSince === null ? '–' : Math.max(1, Math.ceil((1 - p) * AUTO_START_MS / 1000));
       if (p >= 1) start();
     },
     unmount() { stops.forEach(s => s()); },

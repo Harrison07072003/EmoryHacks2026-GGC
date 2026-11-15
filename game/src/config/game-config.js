@@ -28,12 +28,13 @@ export const MODES = {
     id: 'normal', label: 'Normal', subtitle: 'Moderate', characterId: 'volt',
     blurb: 'Standard difficulty. Miss too many notes in a row and the song ends.',
     failEnabled: true,
-    approachSec: 1.9,
-    windows: { perfect: 0.12, good: 0.30 },
-    zoneTolerance: 0.03,
-    bandTolerance: 0.06,
-    minDwellMs: 50,
-    curve: { tolerance: 0.12, perfectCoverage: 0.82, goodCoverage: 0.55 },
+    // tuned about halfway between Practice and the old Normal (playtest: the jump was too big)
+    approachSec: 2.15,
+    windows: { perfect: 0.14, good: 0.34 },
+    zoneTolerance: 0.04,
+    bandTolerance: 0.08,
+    minDwellMs: 25,
+    curve: { tolerance: 0.12, perfectCoverage: 0.80, goodCoverage: 0.55 },
   },
   hard: {
     id: 'hard', label: 'Challenge', subtitle: 'Hard', characterId: 'nova',
@@ -60,7 +61,7 @@ export const SCORING = {
 export const HEALTH = {
   max: 100,
   start: 100,
-  missPenalty: { practice: 0, normal: 9, hard: 12 },
+  missPenalty: { practice: 0, normal: 6, hard: 12 },
   regen: { perfect: 2.5, good: 1.2 },
   danger: [               // checked top to bottom; first match wins
     { level: 2, below: 30 },   // darker red, slow pulse
@@ -91,7 +92,8 @@ export const CURVE = {
 };
 
 export const INPUT = {
-  gazeLatencyMs: { live: 90, sim: 90, mouse: 0 },   // judge notes against where the eyes were this long ago
+  gazeLatencyMs: { live: 115, sim: 90, mouse: 0 },  // judge notes against where the eyes were this long ago
+                                                     // (live 115: the tracker's measured average lag on a moving target)
   refineOnPerfect: true,  // tell the tracker "the player was certainly looking here" on Perfect hits
 };
 
@@ -110,21 +112,35 @@ export const PREVIEW = { durationSec: 8, fadeSec: 1.2 };
 
 export const CALIBRATION = {
   minScore: 60,           // below this the engine reports the calibration as not ready
-  betweenSongs: 'quick',  // 'quick' (8 dots + short follow), 'full', or 'off'
+  betweenSongs: 'quick',  // 'quick' (8 dots + short follow + 4 band hops), 'full', or 'off'
   quickPursuitMs: 5000,
   fullPursuitMs: 10000,
+  quickHops: 4,           // top/bottom band hops at the end (the engine checks the player looks at each)
+  fullHops: 8,
   keepWorseBy: 8,         // a between-song recalibration that scores this much lower than the saved one is discarded
+  resultAutoMs: 4000,     // a good result screen continues by itself after this long
 };
 
-/** Face check before calibration (camera view with an oval guide). Box values are 0-1 of the camera frame. */
+/** Mouse input next to the eyes. The mode is chosen in Settings. */
+export const MOUSE = {
+  defaultMode: 'off',        // 'off': eyes only; 'assist': eyes first, the mouse drives only while it moves
+                             // or the face is lost
+  assistTravelPx: 60,        // assist: mouse travel within takeoverWindowMs that counts as deliberate use
+  takeoverWindowMs: 400,
+  assistHoldMs: 1500,        // assist: the mouse keeps control this long after it stops
+  offerAfterFailures: 2,     // failed calibrations in a row before the game offers to play with the mouse
+};
+
+/** Tracking drifted during a song (head moved, light changed): pause and recalibrate. */
+export const DRIFT = {
+  qualityBelow: 30,       // the engine's live tracking quality (0-100)
+  sustainSec: 2.5,        // ...for this long
+  noticeSec: 3,           // "Recalibrating in 3…" (with Cancel) before the quick recalibration starts
+};
+
+/** Face check before calibration. The checks themselves are the engine's positionChecks(). */
 export const FACE_CHECK = {
   holdSec: 1.5,           // all required checks green this long -> continue by itself
-  maxOffsetX: 0.15,       // face centre may be this far from the middle, left/right
-  maxOffsetY: 0.2,        // and up/down
-  minWidth: 0.2,          // face narrower than this = too far away
-  maxWidth: 0.5,          // wider than this = too close
-  minLight: 50,           // mean brightness of the face, 0-255 (before the engine's auto-exposure)
-  maxGlare: 0.03,         // share of blown-out pixels in an eye (glasses reflections); a warning only
 };
 
 /** Pausing during a song. */

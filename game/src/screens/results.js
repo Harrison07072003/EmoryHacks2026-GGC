@@ -53,9 +53,10 @@ export default function results(root, app, { result }) {
           <dt class="miss">Miss</dt><dd class="miss">${result.miss}</dd>
           <dt>Max combo</dt><dd>${result.max_combo}</dd>
           <dt>Frenzy</dt><dd>${result.frenzy_count}×</dd>
+          ${result.tracking?.cell_pct != null ? `<dt>Tracking</dt><dd title="time the tracker put your gaze on the right lane and band">${result.tracking.cell_pct}% on target</dd>` : ''}
         </dl>
       </div>
-      <p class="hint" style="font-size:15px">Accuracy = (Perfect + 0.6 × Good) ÷ all notes judged.${result.input_source !== 'live' ? ' <b>Played with simulated/mouse input (dev).</b>' : ''}</p>
+      <p class="hint" style="font-size:15px">Accuracy = (Perfect + 0.6 × Good) ÷ all notes judged. Tracking = time the tracker had your gaze on the right lane and band (timing not included).${result.input_source !== 'live' ? ' <b>Played with simulated/mouse input (dev).</b>' : ''}</p>
       <div class="row" data-buttons></div>
     </section>`);
   root.appendChild(el);

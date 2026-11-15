@@ -4,8 +4,14 @@ One eye-tracked rhythm game: 4 lanes x 2 bands (top = discrete notes, bottom = s
 We own the **eye-controller** (webcam -> gaze/lane/band signals). The game is built on top by teammates.
 
 ## Layout
-- `eye-controller/` — the engine. All our work happens here. Read `eye-controller/README.md` first:
-  it has the public interface, calibration flow, storage, recording/replay, and a **Code map**.
+- `eye-controller/` — the engine. Read `eye-controller/README.md` first: public interface,
+  calibration flow, storage, recording/replay, and a **Code map**.
+- `game/` — the RhythmEyez game (merged from the game team's branch on 2026-11-15; we now own
+  merging it). It uses only the engine's public entry point and the engine's own face view,
+  calibration and result screens (`game/src/input/calibration-flow.js`, theme 'neon').
+  Game rules and numbers live in `game/src/config/game-config.js`. `cd game && npm test`.
+- Both dev servers use port 5190 (browser storage is per port, so they share calibrations):
+  run one at a time.
 - `app/` — legacy minigames plus teammates' in-progress work (voice input in `app/core/voice.js`,
   possibly a database). **Do not edit, move, or delete anything in `app/`** unless the user asks.
 
@@ -36,7 +42,40 @@ change one thing, re-score. Thresholds in `src/calibration/scoring.js`, `src/sig
 and `src/smoothing/gaze-smoother.js` are first estimates and are expected to move.
 
 ## Known open items
-- Vertical (top/bottom band) accuracy on real faces is the biggest risk; verify with recordings.
-- A smooth-pursuit calibration phase is not built yet and is the likely next accuracy lever.
+- Vertical (top/bottom band) accuracy on real faces is the biggest risk. Measured on one player
+  (2026-11-15): band switches on target ~60% with glasses, ~85% without; lane jumps ~75% / ~95%.
+- Calibration ends with an ~11 s moving-dot phase (v0.2). On real clips it raised the path
+  staying in the bottom band from 74% to 98%; it did not change jumps or switches.
+- Tried and reverted: 128x64 eye crops (no gain on a 720p webcam, 30 -> 25 fps). MediaPipe
+  eyeLook* blendshapes barely move vertically (recorded in clips, not used).
+- Using a player's past clips as a prior makes an 8-dot calibration usable but still well
+  below 16 dots; not shipped.
+- v0.3: calibration ends with 8 top/bottom band hops. Offline estimate was switches 60% -> 70%;
+  on live v0.3 clips the hops added ~0-2 points (the v0.3 session was already at 83% without
+  them). Round 3 live, glasses: jumps 91%, switches 84%; no glasses: 95% / 94% on target.
+- Remaining misses are mostly latency: on target 9% at 0-300 ms after a note, 53% at
+  300-500 ms, 90% at 500-700 ms, 95% after 700 ms. Steady-state accuracy in good conditions
+  is near the ceiling; the open gains are latency and robustness (head movement, distance,
+  backlight, other players), not more calibration in ideal conditions. Online
+  refinement retuned (REFINE in core/engine.js); the test run and replay confirm hits, which
+  lifted jumps 78% -> 82% and switches 62% -> 65% on target.
+- A one-dot re-anchor was tested offline and not built: the vertical error is a scale error
+  (top band reads low, bottom is fine), so a single offset fixes one band and breaks the other.
+- v0.4 (2026-11-15): face view (`src/ui/face-view.js`), face check, calibration overlay with
+  phases and mini face view, score reveal, `positionChecks` tuned on clips, `faceData()` and
+  `cancelCalibration()`. Seen on a real webcam and approved after toning the mesh down; the face
+  label is CONDITIONS % (live conditions), not `state.quality` (capped at 40 before calibrating).
+  Notes for the game team: `eye-controller/docs/GAME-INTEGRATION.md`.
+- v0.5: band hops are gated on a provisional model from the dots (calibration/session.js);
+  before that they were timed and passed while looking anywhere (and fed wrong samples).
+- v0.5.1: dots are gaze-checked from the 3rd (left/right fit) and 6th (provisional model);
+  the checker learns only from dots that passed, so one looked-away dot cannot poison it.
+- Game decisions (2026-11-15, from the user): every session starts with face check + FULL
+  calibration automatically; Redo is always full; quick only between songs / after drift and
+  built on the player's own current calibration; the pool is opt-in (Settings, `pool: false`
+  otherwise); mouse is off by default and emergency mouse is only offered after 2 failed
+  calibrations; drift goes straight to a quick recalibration (3 s notice, cancel = resume).
+- The `rhythmeyez-game` branch was merged into `main` on 2026-11-15. Never write to it; all
+  work goes on `main`.
 - Firestore adapter for the pooled baseline and profiles is not built.
 - TypeScript is optional and not started.

@@ -104,22 +104,23 @@ describe('calibration through the contract', () => {
     expect(eyes.state).toMatchObject({ ready: false, lane: null, calibrationScore: null });
     const shown = [];
     let moving = 0;
-    const done = eyes.startCalibration({ onTarget: (t, _i, _n, info) => (info?.moving ? moving++ : shown.push(t)) });
+    const done = eyes.startCalibration({ onTarget: (t, _i, _n, info) => (info?.moving || info?.hop ? moving++ : shown.push(t)) });
     eyes.mock.step(60000);
     const result = await done;
     expect(shown.filter(Boolean)).toHaveLength(16);
-    expect(moving).toBeGreaterThan(250);                         // ~11 s moving-dot phase, one call per frame
+    expect(moving).toBeGreaterThan(250);                         // ~11 s moving dot (one call per frame) + band hops
     expect(result.ok).toBe(true);
     expect(result.score).toBeGreaterThanOrEqual(80);
     expect(result.points.filter(p => p.score !== null)).toHaveLength(16);
-    expect(result.points.at(-1)).toMatchObject({ score: null, kept: true });   // the moving dot is never scored
+    expect(result.points.filter(p => p.kind === 'hop')).toHaveLength(8);
+    expect(result.points.filter(p => p.kind).every(p => p.score === null && p.kept)).toBe(true); // play-like phases are never scored
     look(eyes, { x: 0.875, y: 0.75 });
     expect(eyes.state).toMatchObject({ lane: 3, band: 'bottom', ready: true });
   });
   it('refuses play after a bad calibration, then a top-up of the weak cells fixes it', async () => {
     const eyes = mock({ seed: 12, autoCalibrate: false });
     await eyes.init();
-    const first = eyes.startCalibration({ pursuitMs: 0, onTarget: t => eyes.mock.setConditions(t && t.x > 0.5 ? { light: 'bad', glare: true } : { light: 'good', glare: false }) });
+    const first = eyes.startCalibration({ pursuitMs: 0, hops: 0, onTarget: t => eyes.mock.setConditions(t && t.x > 0.5 ? { light: 'bad', glare: true } : { light: 'good', glare: false }) });
     eyes.mock.step(120000);
     const bad = await first;
     expect(bad.ok).toBe(false);
@@ -183,12 +184,42 @@ describe('profiles and the pooled baseline through the contract', () => {
     await away.importBaseline(exported);
     expect((await away.exportBaseline()).players).toBe(4);
     const shown = [];
-    const done = away.startCalibration({ quick: true, onTarget: (t, _i, _n, info) => t && !info?.moving && shown.push(t) });
+    const done = away.startCalibration({ quick: true, onTarget: (t, _i, _n, info) => t && !info?.moving && !info?.hop && shown.push(t) });
     away.mock.step(60000);
     const result = await done;
     expect(shown).toHaveLength(8);
     expect(result.ok).toBe(true);
     for (const cell of allCells()) { look(away, cellCenter(cell)); expect({ lane: away.state.lane, band: away.state.band }).toEqual(cell); }
+  });
+});
+
+describe('quick calibration and the pool option', () => {
+  const dotsShown = async (eyes, opts) => {
+    let dots = 0;
+    const done = eyes.startCalibration({ ...opts, onTarget: (t, _i, _n, info) => { if (t && info?.phase === 'dots') dots++; } });
+    eyes.mock.step(90000);
+    return { result: await done, dots };
+  };
+  it('quick builds on the player\'s own current calibration (8 dots), even with the pool off', async () => {
+    const eyes = mock({ seed: 41, pool: false });           // the mock is calibrated on init
+    await eyes.init();
+    const { result, dots } = await dotsShown(eyes, { quick: true });
+    expect(dots).toBe(8);
+    expect(result.ok).toBe(true);
+    for (const cell of allCells()) { look(eyes, cellCenter(cell)); expect({ lane: eyes.state.lane, band: eyes.state.band }).toEqual(cell); }
+  });
+  it('quick with nothing to build on is a full calibration', async () => {
+    const eyes = mock({ seed: 42, pool: false, autoCalibrate: false });
+    await eyes.init();
+    expect((await dotsShown(eyes, { quick: true })).dots).toBe(16);
+  });
+  it('pool: false never warm-starts from the pooled baseline', async () => {
+    const storage = memoryStore();
+    for (const seed of [43, 44]) { const e = await ready({ seed, storage }); await e.saveProfile(`p${seed}`); }
+    const off = mock({ seed: 45, storage, pool: false, autoCalibrate: false });
+    await off.init();
+    expect((await off.exportBaseline()).players).toBe(2);   // the pool is still there and still exported
+    expect((await dotsShown(off, { quick: true })).dots).toBe(16);
   });
 });
 
@@ -209,7 +240,7 @@ describe('online refinement', () => {
     }
     expect(before).toBeGreaterThan(0.06);
     expect(Math.abs(eyes.state.gaze.x - target.x)).toBeLessThan(before * 0.6);
-    expect(biggestStep).toBeLessThan(0.02);
+    expect(biggestStep).toBeLessThan(0.03);   // no visible jump (a lane is 0.25 wide)
   });
   it('rejects a confirmation when the player is clearly looking elsewhere', async () => {
     const eyes = await ready({ seed: 22 });

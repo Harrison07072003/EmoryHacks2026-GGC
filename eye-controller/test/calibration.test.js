@@ -70,8 +70,21 @@ describe('adaptive capture session', () => {
     const { session, ms } = run();
     expect(session.done).toBe(true);
     expect(session.points).toHaveLength(4);
-    expect(session.points.every(p => !p.weak && p.samples.length === 18 && p.steadiness >= 0.6)).toBe(true);
-    expect(ms / 4).toBeLessThan(1500);
+    expect(session.points.every(p => !p.weak && p.samples.length === 24 && p.steadiness >= 0.6)).toBe(true);
+    expect(ms / 4).toBeLessThan(2000);   // settle 0.5 s + 24 frames + a 0.3 s lock per dot
+  });
+  it('reports seeking, then capturing with live steadiness, then locked, holding the dot briefly', () => {
+    const eye = createSimEye({ seed: 3 }), stages = [], shown = [];
+    const session = new CalibrationSession({ targets: defaultTargets().slice(0, 2), onTarget: t => shown.push(t), onProgress: (p, info) => stages.push(info.stage) }).start();
+    let t = 0, lockedAt = null, nextAt = null;
+    for (let i = 0; i < 400 && !session.done; i++) {
+      t += DT; session.push(eye(t, session.target));
+      if (lockedAt === null && stages.at(-1) === 'locked') lockedAt = t;
+      if (lockedAt !== null && nextAt === null && shown.length === 2) nextAt = t;
+    }
+    const order = stages.filter((s, i) => s !== stages[i - 1]);
+    expect(order.slice(0, 3)).toEqual(['seeking', 'capturing', 'locked']);
+    expect(nextAt - lockedAt).toBeGreaterThanOrEqual(300);
   });
   it('keeps sampling a shaky target, then keeps its best window and marks it weak', () => {
     const calm = run(), shaky = run({ cond: { light: 'bad' } });
@@ -136,6 +149,69 @@ describe('moving-dot (pursuit) phase', () => {
     const movingOnly = mean(seeds.map(s => testError(fitCalibration([withPursuit(s)]).model, s)));
     expect(moving).toBeLessThan(plain * 1.15);
     expect(movingOnly).toBeLessThan(0.06);
+  });
+});
+
+describe('dots check where the player looks', () => {
+  /** 16 dots; `away(index)` returns where the eyes go instead of the dot, or null to look at it. */
+  function run(away) {
+    const eye = createSimEye({ seed: 6 }), info = [];
+    const session = new CalibrationSession({ targets: defaultTargets(), onProgress: (_p, i) => info.push({ index: session.index, ...i }) }).start();
+    let t = 0;
+    for (let i = 0; i < 9000 && !session.done; i++) session.push(eye((t += DT), away(session.index) ?? session.target));
+    return { session, info, ms: t };
+  }
+  it('an attentive player passes every dot at once', () => {
+    const { session } = run(() => null);
+    expect(session.points.filter(p => p.weak)).toHaveLength(0);
+  });
+  it('looking elsewhere stalls the dot ("look at the dot") and it ends up weak, from the 3rd dot on', () => {
+    // looks at dots 0-5 properly, then keeps staring at the far corner instead
+    const corner = { x: 0.96, y: 0.04 };
+    const honest = run(() => null), cheat = run(i => (i >= 6 && i <= 10 ? corner : null));
+    const weak = cheat.session.points.slice(6, 11).filter(p => p.weak).length;
+    expect(weak).toBeGreaterThanOrEqual(4);   // the corner may genuinely be near one of them
+    expect(cheat.session.points.slice(6, 11).filter(p => p.offTarget && p.samples.length === 0).length).toBeGreaterThanOrEqual(4); // no wrong data kept
+    expect(cheat.ms).toBeGreaterThan(honest.ms + 10000);
+    expect(cheat.info.some(i => i.index >= 6 && i.stage === 'capturing' && i.onTarget === false)).toBe(true);
+  });
+  it('corner dots rely on steadiness only, so a steady look near them locks', () => {
+    // dots 12-15 are the corners; look a little off each (as the early model would mis-place it)
+    const { session } = run(i => (i >= 12 ? { x: defaultTargets()[i].x < 0.5 ? 0.2 : 0.8, y: defaultTargets()[i].y < 0.5 ? 0.2 : 0.8 } : null));
+    expect(session.points.slice(12, 16).every(p => !p.weak && !p.offTarget)).toBe(true);
+  });
+  it('the first two dots cannot be checked yet and rely on steadiness', () => {
+    const { info } = run(() => null);
+    expect(info.filter(i => i.index < 2 && i.stage === 'capturing').every(i => i.onTarget === true)).toBe(true);
+  });
+});
+
+describe('band hops check where the player looks', () => {
+  const hops = [{ x: 0.125, y: 0.25 }, { x: 0.625, y: 0.75 }, { x: 0.875, y: 0.25 }, { x: 0.375, y: 0.75 }];
+  /** Full dots, then hops; `during` decides where the eyes are during the hops. */
+  function run(during) {
+    const eye = createSimEye({ seed: 5 }), stages = [];
+    const session = new CalibrationSession({ targets: defaultTargets(), hops, onProgress: (_p, info) => session.phase === 'hops' && stages.push(info) }).start();
+    let t = 0;
+    for (let i = 0; i < 6000 && !session.done; i++) {
+      const look = session.phase === 'hops' ? during(session.target) : session.target;
+      session.push(eye((t += DT), look));
+    }
+    return { session, stages, hopPoints: session.points.filter(p => p.kind === 'hop') };
+  }
+  it('fills each hop while the player looks at it, and reports the live gaze', () => {
+    const { session, stages, hopPoints } = run(target => target);
+    expect(session.done).toBe(true);
+    expect(hopPoints).toHaveLength(4);
+    expect(hopPoints.every(p => p.samples.length === 15)).toBe(true);
+    expect(stages.some(s => s.gaze && s.onTarget)).toBe(true);
+  });
+  it('does not pass when the player looks at the other band: each hop gives up and adds no data', () => {
+    const { session, stages, hopPoints } = run(target => ({ x: target.x, y: target.y < 0.5 ? 0.75 : 0.25 }));
+    expect(session.done).toBe(true);
+    expect(hopPoints).toHaveLength(0);
+    expect(stages.filter(s => s.stage === 'skipped')).toHaveLength(4);
+    expect(stages.filter(s => s.stage === 'capturing').every(s => s.onTarget === false)).toBe(true);
   });
 });
 

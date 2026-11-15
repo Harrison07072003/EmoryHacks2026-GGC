@@ -14,12 +14,13 @@ Commands assume the terminal is in the repo folder `EmoryHacks2026-GGC`.
    npm --prefix eye-controller run dev
    ```
 
-5. Cmd+click the `http://localhost:5173` link, make sure it opens in **Chrome**, then go to
-   `http://localhost:5173/debug.html`.
+5. Cmd+click the `http://localhost:5190` link, make sure it opens in **Chrome**, then go to
+   `http://localhost:5190/debug.html`.
 6. Allow the camera. The camera view and eye close-ups should appear on the left.
 7. Type your player name: **jonathan zaharia** (always the same, so the counter tracks you).
 
-Leave that terminal running the whole session.
+Leave that terminal running the whole session. The game uses the same port (5190), so stop
+one server (Ctrl+C) before starting the other.
 
 **First time on a new computer only**, before step 4:
 
@@ -38,11 +39,12 @@ npm --prefix eye-controller run fetch-model
 - Set up the room for the condition selected in the checklist (click it to read what to do).
 - Sit how you would to play. Don't move your head unless the condition says so.
 
-## 3. Record a clip (about 90 seconds)
+## 3. Record a clip (about 100 seconds)
 
 1. Press **Record clip** (or Enter).
 2. **Calibration:** look at each dot until its ring fills (16 dots), then **follow the moving
-   dot** with your eyes for about 11 seconds (it says "Follow the dot with your eyes").
+   dot** for about 11 seconds, then **look at each dot as it hops** between top and bottom
+   (8 hops, about 10 seconds).
 3. **Countdown**, then the test run:
    - **Jumps:** a note lights up in the top half. Look at its centre dot until the next one.
    - **Path:** a dot glides along the bottom half. Follow it with your eyes.
@@ -54,32 +56,25 @@ nothing is saved. Then record it again.
 
 ## 4. Your task list
 
-Round 1 (version 0.1) is done: baselines and every condition are recorded and scored.
+Rounds 1 (v0.1) and 2 (v0.2) are done and scored.
 
-### Now: round 2 on version 0.2 (measures the vertical fixes)
+### Now: round 3 on version 0.3 (about 6 minutes)
 
-Version 0.2 adds the moving dot to calibration, sharper eye images, and asks the camera for
-1080p. Restart the dev server first (section 1), then check the stats under the camera say
-`camera 1920x1080` (if it shows less, your webcam cannot do 1080p; that is fine, note it).
+Version 0.3 ends calibration with dots that **hop between the top and bottom band**
+(look at each one), and the test run now **learns from your hits** like the game will.
 
-In the **note** box type `v2` for every clip this round, so the files are easy to tell apart.
+1. Restart the dev server (section 1) so 0.3 loads.
+2. Type `v3` in the note box.
+3. Record **3 baseline clips** (glasses on, normal setup, back to back).
 
-- [ ] baseline × 5 (glasses on, normal setup, back to back)
-- [ ] noglasses × 2
-- [ ] drift5 × 2: right after a baseline that scored 60+, use the computer normally for
-      5 minutes, then select drift5 and press Record clip. The page now refuses if the
-      current calibration did not pass.
+Calibration is now about 40 seconds: 16 dots, then follow the gliding dot, then look at
+each hopping dot. Each clip is about 100 seconds in all.
 
-Then run the scoring (section 5) and tell Claude: "round 2 is in".
+Optional: 2 noglasses clips with `v3` in the note.
+
+Then run the scoring (section 5) and tell Claude: "round 3 is in".
 
 Rest your eyes between clips: look at something far away for 20 seconds every 3-4 clips.
-Tired or watering eyes make the data worse.
-
-### Later (only if round 2 looks good)
-
-Re-record the conditions that matter for real play: bright, backlit, close, far, headmove.
-Skip `dim` (a completely dark room cannot work with a webcam; the game should ask for some
-light) and `busy` (the poster face did not affect tracking).
 
 ## 5. After a batch: score everything
 

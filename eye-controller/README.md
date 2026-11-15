@@ -18,7 +18,8 @@ npm test        # all unit and end-to-end tests, headless, no camera needed
 
 - `/` is **Hello Lanes**, the example harness. It starts on the mock (move the mouse = move
   the eyes). Add `?live` to the URL, or press "Use live webcam", for real tracking.
-- `/debug.html` is the tracker debug page: camera view, eye crops, camera-adjust sliders,
+- `/debug.html` is the tracker debug page: camera view (what the tracker analyses, after
+  auto-exposure and the face-following zoom; press P for the raw camera), eye crops, camera-adjust sliders,
   calibration, session recording, baseline export / import.
 
 ## Requirements
@@ -89,7 +90,8 @@ Lanes split `x` into 4 equal columns; `y < 0.5` is the `top` band. Timestamps `t
 | `await saveProfile(id?)` | save the current calibration and add it to the pooled baseline |
 | `await exportBaseline()` / `await importBaseline(data)` | move the pooled baseline between machines |
 
-Extras outside the frozen contract: `eyes.setTarget({ x, y }, id)` (tell the tracker where
+Extras outside the frozen contract: `eyes.faceData()` (camera image, face mesh, eye close-ups,
+latest frame: for drawing the player's face), `eyes.cancelCalibration()`, `eyes.setTarget({ x, y }, id)` (tell the tracker where
 the player should be looking, so collected data can be scored), `eyes.onSample(cb)` (one
 object per frame with measurements, gaze and target; see `docs/database-brief.md`),
 `eyes.confirmOnTarget({ x, y })` (online refinement: call
@@ -117,18 +119,30 @@ smoothing, lane hysteresis, quality and calibration all behave like the live mod
 1. `startCalibration()` shows a dot that walks 16 targets (every lane on three rows, plus
    corners). Each dot stays until the last 18 frames are steady, so there is no fixed
    duration: about a second per dot for a calm player, up to 4 s for a shaky one.
-2. Every point is scored 0-100 from steadiness during capture and its held-out error after
+   Then two play-like phases: a dot that glides through both bands (~11 s, follow it) and
+   8 dots that hop between the top and bottom band (~10 s). They are never scored, only
+   added as training data; on real clips they fixed most of the bottom-band path errors
+   and raised band switches. Turn them off with `{ pursuitMs: 0, hops: 0 }`.
+2. Every dot is scored 0-100 from steadiness during capture and its held-out error after
    fitting. Clear outliers are dropped (never more than a quarter).
 3. The overall score comes back in the result and in `onCalibrationComplete`. Below
    `minScore` (default 60) `ok` is false, `ready` stays false and no lanes are reported.
 4. Offer `startCalibration({ topUp: true })`: it re-captures only `weakCells` (two dots
    each) and merges them with the existing data.
-5. `startCalibration({ quick: true })` uses one dot per cell once a pooled baseline exists.
+5. `startCalibration({ quick: true })` uses one dot per cell on top of the player's current
+   calibration (or the pooled baseline); with neither it is a full calibration.
+   `createEyeController({ pool: false })` never warm-starts from the pool.
 
-Draw the dots yourself with `startCalibration({ onTarget(target, index, total), onProgress(p) })`.
+Draw the dots yourself with `startCalibration({ onTarget(target, index, total, info), onProgress(p) })`
+(`info.moving` during the gliding dot, called every frame; `info.hop` during the band hops).
+
+**Learning during play:** call `eyes.confirmOnTarget({ x, y })` whenever the player hits a
+note (the reported lane and band match it). The tracker then keeps adapting to the player.
+On real clips this lifted lane jumps from 78% to 82% on target and band switches from 62%
+to 65%. Hello Lanes does not do it; the debug page's test run does.
 Otherwise a built-in full-screen overlay is used; Escape cancels it.
 
-**Keys in Hello Lanes:** `C` calibrate, `T` top-up weak cells, and on the mock `F` hide the
+**Keys in Hello Lanes:** `C` face check → calibrate → result screen, `V` face check only, `T` top-up weak cells, and on the mock `F` hide the
 face, `B` bad light.
 
 ## Camera adjust (bad light / glare)
@@ -203,7 +217,8 @@ src/telemetry/        buffered, retrying upload of per-frame samples to a databa
 src/testrun/          scripted test run (jumps, path, band switches) and its full-screen player
 docs/                 data-collection.md (how to record and score clips), database-brief.md
 harness/protocol.js   the data-collection checklist
-src/ui/               default calibration overlay
+src/ui/               face view, face check, calibration overlay, score reveal (ready-made screens)
+docs/GAME-INTEGRATION.md   what is new for the game team, and how to use the screens
 harness/              hello-lanes (example game) and the debug page
 test/                 Vitest suites
 ```

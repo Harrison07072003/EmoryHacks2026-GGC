@@ -13,7 +13,6 @@ import { closePopups, toast } from './screens/ui.js';
 import title from './screens/title.js';
 import calibration from './screens/calibration.js';
 import modes from './screens/modes.js';
-import characters from './screens/characters.js';
 import songs from './screens/songs.js';
 import play from './screens/play.js';
 import results from './screens/results.js';
@@ -25,7 +24,7 @@ import onlineKeyboard from './screens/online-keyboard.js';
 import onlineResults from './screens/online-results.js';
 import onlinePrepare from './screens/online-prepare.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults, onlinePrepare };
+const SCREENS = { title, calibration, modes, songs, play, results, settings: settingsScreen, startupError, faceCheck, onlineSearch, onlineKeyboard, onlineResults, onlinePrepare };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';
@@ -34,7 +33,7 @@ const settings = loadSettings();
 const audio = createAudioEngine(settings);
 const sfx = createSfx(audio);
 const music = createMusic(audio);
-const gaze = createGazeInput(sourceName);
+const gaze = createGazeInput(sourceName, { mouseMode: () => settings.mouseMode, pool: settings.usePool });
 const dwell = createDwell({ ring: document.getElementById('dwell-ring'), sfx });
 const remoteCfg = supabaseConfig();
 const store = createGameStore(safeIndexedDb(), remoteCfg ? createSupabaseClient(remoteCfg) : null);
@@ -46,7 +45,7 @@ const screenListeners = new Set();
 
 const app = {
   gaze, dwell, audio, sfx, music, store, settings,
-  session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false },
+  session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false, failedCalibrations: 0 },
   saveSettings() { saveSettings(settings); audio.setVolumes(settings); },
   toast,
   /** Called with each new screen name (the Online Library uses it to drop levels after a stage). */
@@ -80,6 +79,7 @@ function showSource() {
   const badge = document.getElementById('input-badge'), info = gaze.sourceInfo;
   badge.textContent = info.label;
   badge.classList.toggle('dev', info.dev);
+  badge.classList.toggle('warn', !!info.warn);
 }
 
 // ---- testing keys (never required to play) ----
