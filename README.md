@@ -19,6 +19,52 @@ No eye-tracking hardware, no controller, no hands. Built at EmoryHacks 2026.
   type on with your eyes, and the game builds a level from the song. Voice runs offline in the
   browser (no Google service needed).
 
+## How everything connects
+
+```mermaid
+flowchart LR
+  subgraph Browser["Player's browser (everything runs here)"]
+    Cam[Webcam] --> Engine["Eye engine<br/>eye-controller/"]
+    Engine -->|"lane 0-3, top/bottom band,<br/>quality, events"| Game["Game<br/>game/"]
+    Mic[Microphone] --> Voice["Offline voice<br/>Vosk model"]
+    Voice -->|"commands: genre, search,<br/>play 2, back"| Game
+    Game --> Store[("Browser storage<br/>calibration, settings, scores")]
+  end
+  Pages["GitHub Pages<br/>serves the site + face and voice models"] -->|page load| Browser
+  Game -->|"song search<br/>(search-only key)"| Search["Typesense on Render<br/>song index"]
+  Game -->|"first 30 s of audio"| Archive["archive.org<br/>free Creative Commons music"]
+  GitHub["Push to main"] -->|GitHub Actions build| Pages
+  GitHub -->|redeploy| Search
+```
+
+**In words:**
+
+1. **GitHub Pages hosts the website.** Every push to `main` runs a GitHub Actions workflow
+   ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)). It installs both packages,
+   downloads the face model and the voice model, builds the game and publishes it.
+2. **The eye engine and the game run in the player's browser.** The engine reads the webcam and
+   gives the game simple signals: which lane, which band, how reliable the tracking is, and events
+   such as "face lost". The game only uses that public interface
+   ([`eye-controller/README.md`](eye-controller/README.md)), so the engine could power other games.
+3. **Voice runs in the browser too.** The Vosk speech model (41 MB, loaded once) turns speech into
+   text, and the game turns that text into commands. No speech service is needed.
+4. **Song search is the only server.** Typesense runs on Render
+   ([`game/server/typesense/`](game/server/typesense/README.md)) and holds the list of songs. The
+   website gets a search-only key, so it can search and do nothing else.
+5. **Songs come from archive.org.** The game fetches the first 30 seconds of a track, finds the
+   beat and builds the level in the browser. There's an optional level server (`game/server`) that
+   caches levels, but the game works without it.
+6. **Nothing personal leaves the browser.** Webcam video and microphone audio are processed
+   locally. Calibrations, settings and scores are saved in the browser's own storage.
+
+**What still works if a piece is down:**
+
+| If this is down | Still works | Stops |
+|---|---|---|
+| Render (search) | built-in songs, eye tracking, calibration | Online Library search |
+| archive.org | built-in songs | playing Online Library songs |
+| Internet entirely (after the page has loaded) | built-in songs, eye tracking, voice | Online Library |
+
 ## How the eye tracking works
 
 1. **Face landmarks:** MediaPipe Face Landmarker finds 478 points on your face, including the irises.
