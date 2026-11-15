@@ -62,7 +62,7 @@ function voiceModel() {
   let outDir = 'dist';
   return {
     name: 'voice-model',
-    configResolved(c) { outDir = c.build.outDir; },
+    configResolved(c) { outDir = join(c.root, c.build.outDir); },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const m = req.url?.match(/\/voice-model\/([^?]+)/);

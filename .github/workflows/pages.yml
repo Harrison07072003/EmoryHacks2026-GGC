@@ -1,0 +1,84 @@
+# Builds the game and publishes it to GitHub Pages on every push to main (or by hand from
+# the Actions tab). One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
+#
+# The face model and the offline voice model are not in git; they are downloaded here so the
+# site serves them itself. The base path comes from Pages: "/EmoryHacks2026-GGC/" on the
+# github.io address, "/" once a custom domain is set. Online Library servers are optional:
+# set repository variables VITE_TYPESENSE_URL, VITE_TYPESENSE_SEARCH_API_KEY (search-only key)
+# and VITE_SERVER_URL to turn it on; without them Search says it is unavailable.
+name: Deploy game to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            eye-controller/package-lock.json
+            game/package-lock.json
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install the eye engine (and copy the MediaPipe runtime)
+        working-directory: eye-controller
+        run: |
+          npm ci
+          node scripts/copy-mediapipe.mjs
+
+      - name: Download the face model
+        working-directory: eye-controller
+        run: npm run fetch-model
+
+      - name: Install the game
+        working-directory: game
+        run: npm ci
+
+      - name: Download the offline voice model
+        working-directory: game
+        run: npm run fetch-voice-model
+
+      - name: Build
+        working-directory: game
+        env:
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_TYPESENSE_URL: ${{ vars.VITE_TYPESENSE_URL }}
+          VITE_TYPESENSE_SEARCH_API_KEY: ${{ vars.VITE_TYPESENSE_SEARCH_API_KEY }}
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+        run: |
+          npm run build
+          test -f dist/mediapipe/face_landmarker.task
+          test -f dist/voice-model/vosk-model-small-en-us-0.15.tar.gz
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: game/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

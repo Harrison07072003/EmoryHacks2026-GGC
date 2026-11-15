@@ -353,7 +353,16 @@ rules, re-run with `--restart` so indexed tracks are checked again.
 - **Search says "unavailable":** `npm run typesense` (and check the two search-key lines in `.env`).
 - **"Downloading" never finishes / levels made "on this device":** `npm run server` is not running.
 
-### Deployment (planned; nothing is deployed yet)
+### Deployment
+
+The game deploys to GitHub Pages with `.github/workflows/pages.yml` on every push to `main`
+(or by hand: Actions tab -> "Deploy game to GitHub Pages" -> Run workflow). It installs both
+packages, downloads the face and voice models, builds with the base path Pages reports
+(`/EmoryHacks2026-GGC/` on github.io, `/` with a custom domain) and publishes `game/dist/`.
+One-time: Settings -> Pages -> Source: GitHub Actions (needs repo admin). The Online Library
+turns on when the repository variables `VITE_TYPESENSE_URL`, `VITE_TYPESENSE_SEARCH_API_KEY`
+and `VITE_SERVER_URL` are set (Settings -> Secrets and variables -> Actions -> Variables).
+
 
 | Part | Where | Needs |
 |---|---|---|
