@@ -82,5 +82,10 @@ removed (the debug page was more useful).
   calibrations; drift goes straight to a quick recalibration (3 s notice, cancel = resume).
 - The `rhythmeyez-game` branch was merged into `main` on 2026-11-15. Never write to it; all
   work goes on `main`.
+- Voice (2026-11-15): Google's Web Speech failed on the venue network ("can't reach the speech
+  service"; Google's own demo failed too). Default is now offline Vosk (`game/src/voice/
+  local-recognizer.js`, model in `game/voice-model/`, gitignored, `npm run fetch-voice-model`,
+  copied into `dist/` by the build); `?voice=google` keeps Google. Small model mishears some
+  words ("lofi" -> "lo vi"); the command parser drops leading fillers and fuzzy-matches genres.
 - Firestore adapter for the pooled baseline and profiles is not built.
 - TypeScript is optional and not started.

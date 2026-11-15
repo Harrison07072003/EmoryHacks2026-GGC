@@ -17,12 +17,13 @@ export function searchField(text = '', placeholder = 'Type or say a song, artist
 }
 
 const MIC_LABEL = {
-  listening: '🎤 Mic on', off: '🎤 Mic off', denied: '🎤 Mic blocked', error: '🎤 Mic off', unsupported: '🎤 No voice',
+  listening: '🎤 Mic on', starting: '🎤 Starting…', off: '🎤 Mic off', denied: '🎤 Blocked: retry', error: '🎤 Mic off', unsupported: '🎤 No voice',
 };
 
 /**
  * Gaze/click toggle for the microphone with a live on/off indicator. Alt+M toggles it too.
- * Disabled (with a reason) when the browser has no speech recognition or the mic is blocked.
+ * Disabled (with a reason) when the browser has no speech recognition. A blocked mic stays
+ * pressable: pressing it asks again and explains what to change.
  */
 export function micToggle(app) {
   const { voice } = getOnline(app);
@@ -31,6 +32,7 @@ export function micToggle(app) {
     const listening = voice.state === 'listening';
     btn.textContent = MIC_LABEL[voice.state] ?? MIC_LABEL.off;
     btn.classList.toggle('on', listening || (voice.wanted && voice.state !== 'denied'));
+    btn.classList.toggle('hearing', listening && voice.hearing);
     btn.disabled = !voice.usable;
     btn.title = !voice.supported ? 'This browser has no speech recognition (try Chrome or Edge)' : voice.state === 'denied' ? 'Allow the microphone in the browser to use voice' : 'Toggle voice (Alt+M)';
   };
@@ -51,9 +53,12 @@ export function wireVoice(app, { field, statusEl, onCommand = () => false, plain
   const { voice } = getOnline(app);
   const showStatus = () => {
     if (!statusEl) return;
-    const msg = voice.message || (voice.state === 'listening' ? 'Listening… say a genre, “search <words>”, “back” or “stop listening”' : '');
+    const listening = voice.state === 'listening';
+    const msg = voice.message || (listening ? (voice.hearing ? '🎤 Hearing you…' : 'Listening… say a genre, “search <words>”, “back” or “stop listening”') : '');
     statusEl.textContent = msg;
-    statusEl.classList.toggle('warn', voice.state === 'denied' || voice.state === 'error');
+    // a message while listening is a warning (no sound, service retrying)
+    statusEl.classList.toggle('warn', voice.state === 'denied' || voice.state === 'error' || (listening && !!voice.message));
+    statusEl.classList.toggle('hearing', listening && voice.hearing && !voice.message);
   };
   const detach = voice.attach({
     onInterim: text => field?.set(baseText(), text),

@@ -5,7 +5,7 @@
 import { createRecognizer } from '../voice/recognizer.js';
 
 export function createVoiceSession(makeRecognizer = createRecognizer, { later = (fn, ms) => setTimeout(fn, ms) } = {}) {
-  let handler = null, wanted = false, message = '';
+  let handler = null, wanted = false, message = '', hearing = false;
   const listeners = new Set();
   const notify = () => listeners.forEach(f => f(api));
 
@@ -14,19 +14,24 @@ export function createVoiceSession(makeRecognizer = createRecognizer, { later = 
     onFinal: text => handler?.onFinal?.(text),
     onState: (state, msg) => {
       if (state === 'denied' || state === 'error') wanted = false;
+      if (state !== 'listening') hearing = false;
       message = msg || '';
       notify();
     },
+    onHearing: h => { if (h !== hearing) { hearing = h; notify(); } },
   });
 
   const api = {
     get supported() { return rec.supported; },
-    /** 'unsupported' | 'off' | 'listening' | 'denied' | 'error' */
+    /** 'unsupported' | 'off' | 'starting' | 'listening' | 'denied' | 'error' */
     get state() { return rec.state; },
     get wanted() { return wanted; },
     get message() { return message; },
-    /** Usable now: supported and not blocked by a denied permission. */
-    get usable() { return rec.supported && rec.state !== 'denied'; },
+    /** true while the browser hears speech */
+    get hearing() { return hearing; },
+    /** Usable now: supported. A blocked mic can be retried (the check runs again and
+        explains what to change), so 'denied' does not disable the controls. */
+    get usable() { return rec.supported; },
 
     attach(h) {
       handler = h;

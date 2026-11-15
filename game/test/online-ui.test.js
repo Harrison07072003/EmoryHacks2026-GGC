@@ -64,7 +64,7 @@ function stubBrowser() {
   };
   document.body.innerHTML = `<div id="bg"></div><main id="app"></main><div id="overlay-layer"></div><div id="gaze-cursor"></div>
     <div id="dwell-ring"><div class="pie"></div></div><div id="input-badge"></div><div id="toast"></div>`;
-  history.replaceState({}, '', '/?input=mouse');
+  history.replaceState({}, '', '/?input=mouse&voice=google');   // this flow drives the fake Web Speech API above
   addEventListener('error', e => errors.push(e.message));
   const origError = console.error;
   console.error = (...a) => { errors.push(a.join(' ')); origError(...a); };

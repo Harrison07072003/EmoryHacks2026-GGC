@@ -9,7 +9,7 @@ export default function modes(root, app) {
   const el = html(`
     <section class="screen">
       <h2>Choose your mode</h2>
-      <div class="row" data-cards></div>
+      <div class="row mode-cards" data-cards></div>
     </section>`);
   root.appendChild(el);
   el.appendChild(Object.assign(gazeButton('◀ Back', () => app.go('title'), { cls: 'small purple', sound: 'back' }), { className: 'gbtn small purple top-left' }));

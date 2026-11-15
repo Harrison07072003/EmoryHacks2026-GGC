@@ -6,3 +6,4 @@ dist
 .cache
 online-library/charts/
 online-library/audio/
+voice-model/

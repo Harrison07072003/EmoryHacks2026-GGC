@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalize, parseCommand } from '../src/voice/commands.js';
-import { createRecognizer } from '../src/voice/recognizer.js';
+import { createRecognizer, MESSAGES, micFailure } from '../src/voice/recognizer.js';
+import { createVoiceSession } from '../src/online/voice-session.js';
 
 const GENRES = ['rock', 'electronic', 'drum & bass', 'hip-hop', 'lo-fi', 'ambient'];
 const p = (text, o = {}) => parseCommand(text, { genres: GENRES, ...o });
@@ -75,7 +76,7 @@ function fakeSR() {
   const instances = [];
   class SR {
     constructor() { instances.push(this); this.started = 0; }
-    start() { if (this.running) { const e = new Error('already'); e.name = 'InvalidStateError'; throw e; } this.running = true; this.started++; this.onstart?.(); }
+    start() { if (this.running) { const e = new Error('already'); e.name = 'InvalidStateError'; throw e; } this.running = true; this.started++; this.onstart?.(); if (!SR.mute) this.onaudiostart?.(); }
     abort() { this.running = false; this.onend?.(); }
     // test helpers
     say(text, isFinal = true) { this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal })] }); }
@@ -86,10 +87,16 @@ function fakeSR() {
 }
 
 describe('recognizer', () => {
-  const setup = () => {
-    const { SR, instances } = fakeSR(), states = [], finals = [], interims = [], timers = [];
-    const r = createRecognizer({ SR, onState: (s, m) => states.push([s, m]), onFinal: t => finals.push(t), onInterim: t => interims.push(t), setTimeout: (fn, ms) => timers.push({ fn, ms }) });
-    return { r, rec: () => instances[0], states, finals, interims, timers, runTimers: () => timers.splice(0).forEach(t => t.fn()) };
+  const setup = (o = {}) => {
+    const { SR, instances } = fakeSR(), states = [], finals = [], interims = [], timers = [], hearing = [];
+    if (o.mute) SR.mute = true;
+    const r = createRecognizer({
+      SR, onState: (s, m) => states.push([s, m]), onFinal: t => finals.push(t), onInterim: t => interims.push(t), onHearing: h => hearing.push(h),
+      setTimeout: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; },
+      clearTimeout: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); },
+      micCheck: o.micCheck ?? (() => undefined), log: () => {},
+    });
+    return { r, SR, rec: () => instances[0], states, finals, interims, timers, hearing, runTimers: () => timers.splice(0).forEach(t => t.fn()) };
   };
 
   it('reports unsupported browsers and does nothing', () => {
@@ -157,7 +164,7 @@ describe('recognizer', () => {
     const t = setup();
     t.r.start();
     t.rec().fail('audio-capture');
-    expect(t.states.at(-1)).toEqual(['error', 'No microphone was found']);
+    expect(t.states.at(-1)).toEqual(['error', MESSAGES.noMic]);
   });
 
   it('toggle switches on and off', () => {
@@ -165,5 +172,92 @@ describe('recognizer', () => {
     expect(t.r.toggle()).toBe(true);
     expect(t.r.toggle()).toBe(false);
     expect(vi.isMockFunction(t.r.toggle)).toBe(false);
+  });
+
+  it('checks the microphone first and explains a blocked one', async () => {
+    let reject;
+    const t = setup({ micCheck: () => new Promise((_, no) => { reject = no; }) });
+    t.r.start();
+    expect(t.r.state).toBe('starting');
+    expect(t.rec()).toBeUndefined();   // recognition waits for the check
+    reject(Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }));
+    await Promise.resolve(); await Promise.resolve();
+    expect(t.r.state).toBe('denied');
+    expect(t.r.message).toMatch(/address bar/);
+    expect(t.r.on).toBe(false);
+  });
+
+  it('a blocked microphone can be retried; a passed check is not repeated', async () => {
+    let calls = 0, allow = false;
+    const t = setup({ micCheck: () => { calls++; return allow ? Promise.resolve() : Promise.reject(Object.assign(new Error(), { name: 'NotAllowedError' })); } });
+    t.r.start();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.r.state).toBe('denied');
+    allow = true;
+    t.r.start();
+    await new Promise(r => setTimeout(r, 0));
+    expect(t.r.state).toBe('listening');
+    t.r.stop(); t.r.start();
+    expect(calls).toBe(2);
+    expect(t.r.state).toBe('listening');
+  });
+
+  it('maps microphone errors to clear reasons', () => {
+    expect(micFailure({ name: 'NotFoundError' })).toEqual({ state: 'error', message: MESSAGES.noMic });
+    expect(micFailure({ name: 'NotReadableError' })).toEqual({ state: 'error', message: MESSAGES.busy });
+    expect(micFailure({ name: 'NotAllowedError' }).state).toBe('denied');
+  });
+
+  it('warns when no audio reaches the browser, and clears the warning when speech arrives', () => {
+    const t = setup({ mute: true });
+    t.r.start();
+    expect(t.timers.map(x => x.ms)).toEqual([6000]);
+    t.runTimers();
+    expect(t.r.message).toBe(MESSAGES.noAudio);
+    t.rec().onaudiostart();
+    expect(t.r.message).toBe('');
+  });
+
+  it('reports speech activity and warns after repeated silence', () => {
+    const t = setup();
+    t.r.start();
+    t.rec().onspeechstart(); t.rec().onspeechend();
+    expect(t.hearing).toEqual([true, false]);
+    t.rec().fail('no-speech'); t.runTimers();
+    t.rec().fail('no-speech'); t.runTimers();
+    expect(t.r.message).toBe(MESSAGES.silent);
+    t.rec().say('rock');
+    expect(t.r.message).toBe('');
+  });
+
+  it('says why the speech service failed after the retries', () => {
+    const t = setup();
+    t.r.start();
+    t.rec().fail('network');
+    expect(t.r.message).toBe(MESSAGES.retrying);
+    for (let i = 0; i < 4; i++) { t.runTimers(); t.rec().fail('network'); }
+    expect(t.r.message).toBe(MESSAGES.network);
+  });
+});
+
+describe('voice session', () => {
+  it('stays usable after the mic was blocked, so the player can retry', () => {
+    let opts, state = 'off';
+    const rec = { supported: true, get state() { return state; }, start() {}, stop() {} };
+    const v = createVoiceSession(o => { opts = o; return rec; });
+    v.setOn(true);
+    state = 'denied'; opts.onState('denied', MESSAGES.denied);
+    expect(v.usable).toBe(true);
+    expect(v.wanted).toBe(false);
+    expect(v.message).toBe(MESSAGES.denied);
+  });
+
+  it('tracks hearing while listening', () => {
+    let opts;
+    const v = createVoiceSession(o => { opts = o; return { supported: true, state: 'listening', start() {}, stop() {} }; });
+    opts.onHearing(true);
+    expect(v.hearing).toBe(true);
+    opts.onState('off', '');
+    expect(v.hearing).toBe(false);
   });
 });

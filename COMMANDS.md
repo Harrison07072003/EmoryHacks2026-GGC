@@ -9,6 +9,7 @@ Run from the repo folder `EmoryHacks2026-GGC`. Chrome only. Allow the camera.
 | `npm --prefix eye-controller install` | installs the eye engine (also copies MediaPipe files) |
 | `npm --prefix eye-controller run fetch-model` | downloads the face model so tracking works offline |
 | `npm --prefix game install` | installs the game |
+| `npm --prefix game run fetch-voice-model` | downloads the offline voice model (41 MB) so voice works without Google |
 
 ## Play the game
 
@@ -51,7 +52,9 @@ Built-in songs never need any of this. Run inside `game/` (`cd game`):
 | `npm run typesense:stop` | stops the search engine |
 
 In the game: song select → **🔍 Search** → *Say genre* (voice) or *Keyboard* (type with your
-eyes). Voice needs Chrome or Edge, internet and microphone permission (**Alt+M** toggles it).
+eyes). **Alt+M** toggles the mic. Voice runs offline in the browser (Vosk model, any browser,
+microphone permission only); the first use loads the model (about 1 s locally). Add
+`?voice=google` to the URL to use Google's speech service instead (Chrome/Edge + internet).
 No other keys or accounts needed (archive.org is free). If the server is down, the game builds
 the level in the browser.
 
@@ -97,4 +100,7 @@ the level in the browser.
 | face tracking files missing | run the two first-time engine commands above |
 | "Outdated Optimize Dep" / start-up error in webcam mode | reload once (it now does this by itself); fixed in `game/vite.config.js` |
 | "Online search is unavailable" | `npm run typesense` (and check the keys in `game/.env`), then restart `npm run dev` |
+| voice does nothing | read the red line under the search field; the mic button retries. Mac: System Settings → Privacy & Security → Microphone → your browser on. Console lines start with `[voice]` |
+| "offline voice model did not load" | `npm --prefix game run fetch-voice-model`, restart `npm run dev` (without it the game downloads the model from the internet) |
+| "can't reach the speech service" | only with `?voice=google`: Google is blocked on this network or browser; drop `?voice=google` |
 | old behaviour after a pull | stop the server, start it again, hard-reload (Cmd+Shift+R) |

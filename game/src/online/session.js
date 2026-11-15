@@ -4,6 +4,7 @@ import { onlineConfig } from './config.js';
 import { createOnlineSearch } from './search-client.js';
 import { createSegmentLoader } from './audio-segment.js';
 import { createVoiceSession } from './voice-session.js';
+import { createVoiceRecognizer } from '../voice/voice-engine.js';
 import { parseCommand } from '../voice/commands.js';
 
 export const PREVIEW_SEC = 10;   // hover preview: the first 10 s of the song
@@ -16,7 +17,8 @@ export function getOnline(app) {
     app.online = {
       config, search,
       segments: createSegmentLoader(app.audio.ctx),
-      voice: createVoiceSession(),
+      // offline speech by default (?voice=google for Google's); it records through the game's AudioContext
+      voice: createVoiceSession(o => createVoiceRecognizer(o, { audioContext: () => app.audio?.ctx })),
       query: { q: '', genre: null },   // the current search: what the results screen shows
       draft: '',                        // keyboard text not yet searched
       genres: [],

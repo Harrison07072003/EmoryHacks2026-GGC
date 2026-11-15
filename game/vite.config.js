@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import { fileURLToPath } from 'node:url';
+import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
+import { join, normalize } from 'node:path';
 
 // The game imports the eye engine straight from ../eye-controller/src (its public entry
 // point only) and serves that package's public/ folder, which holds the MediaPipe wasm
@@ -19,6 +21,7 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     publicDir: `${engine}/public`,
+    plugins: [voiceModel()],
     // A fixed port keeps the same origin (http://localhost:5190) every time. Browser storage is
     // per origin, so a different port would look like a new player: calibration, settings and
     // results would seem to vanish.
@@ -38,7 +41,7 @@ export default defineConfig(({ mode }) => {
     // The eye engine loads MediaPipe with a dynamic import from ../eye-controller, which Vite's
     // dependency scan does not see. Without this, Vite discovers it on the first webcam start,
     // re-optimizes, and that request fails with "504 Outdated Optimize Dep" (startup error screen).
-    optimizeDeps: { include: ['@mediapipe/tasks-vision'] },
+    optimizeDeps: { include: ['@mediapipe/tasks-vision', 'vosk-browser'] },   // vosk-browser: loaded on first voice use, same problem
     test: { environment: 'node', include: ['test/**/*.test.js'] },
   };
 });
@@ -50,3 +53,27 @@ function assertNoSecretsInClient(env) {
   const leak = Object.keys(env).find(k => k.startsWith('VITE_') && env[k] === admin);
   if (leak) throw new Error(`${leak} contains the Typesense ADMIN key. Browser code may only get the search-only key.`);
 }
+
+/** The offline speech model (game/voice-model/, gitignored, `npm run fetch-voice-model`) is
+    served at <base>voice-model/ in dev and copied into dist/voice-model/ by the build. The
+    engine's public/ is the publicDir, so the game's own large assets go through this. */
+function voiceModel() {
+  const dir = fileURLToPath(new URL('./voice-model', import.meta.url));
+  let outDir = 'dist';
+  return {
+    name: 'voice-model',
+    configResolved(c) { outDir = c.build.outDir; },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = req.url?.match(/\/voice-model\/([^?]+)/);
+        const file = m && normalize(join(dir, decodeURIComponent(m[1])));
+        if (!file?.startsWith(dir) || !existsSync(file) || !statSync(file).isFile()) return next();
+        res.setHeader('Content-Type', 'application/gzip');
+        res.setHeader('Content-Length', statSync(file).size);
+        createReadStream(file).pipe(res);
+      });
+    },
+    closeBundle() { if (existsSync(dir)) cpSync(dir, join(outDir, 'voice-model'), { recursive: true }); },
+  };
+}
+

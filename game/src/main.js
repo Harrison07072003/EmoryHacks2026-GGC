@@ -19,6 +19,7 @@ import results from './screens/results.js';
 import settingsScreen from './screens/settings.js';
 import startupError from './screens/startup-error.js';
 import faceCheck from './screens/face-check.js';
+import { createGazeScroll } from './screens/gaze-scroll.js';
 import onlineSearch from './screens/online-search.js';
 import onlineKeyboard from './screens/online-keyboard.js';
 import onlineResults from './screens/online-results.js';
@@ -65,8 +66,10 @@ const app = {
 
 // ---- frame loop: gaze -> dwell -> cursor -> screen ----
 const cursor = document.getElementById('gaze-cursor');
+const gazeScroll = createGazeScroll();
 function frame(now) {
   const g = gaze.update();
+  gazeScroll.update(document.getElementById('overlay-layer').childElementCount > 0);
   dwell.update(g);
   cursor.classList.toggle('show', settings.showGazeCursor && gaze.calibrated && currentName !== 'calibration' && currentName !== 'faceCheck');
   cursor.classList.toggle('lost', !g.valid);

@@ -40,7 +40,7 @@ const GENRE = /^(?:genre|genres|style|category|play some|some)\s+(.+?)(?:\s+musi
  * @returns  a command object, or null when nothing should happen
  */
 export function parseCommand(transcript, { genres = [], plainIsSearch = true } = {}) {
-  const t = normalize(transcript);
+  const t = stripFillers(normalize(transcript));
   if (!t) return null;
   if (STOP.test(t)) return { type: 'stop' };
   if (BACK.test(t)) return { type: 'back' };
@@ -64,9 +64,33 @@ export function parseCommand(transcript, { genres = [], plainIsSearch = true } =
   return plainIsSearch ? { type: 'search', q: t } : null;
 }
 
-/** Match spoken words to a known genre value ("drum and bass" -> "drum & bass"; "hiphop" -> "hip-hop"). */
+// the offline recognizer often hears a leading "the" / "uh" before a short command
+const FILLERS = /^(?:(?:the|a|uh|um|uhm|er|erm|ah|oh|so|and)\s+)+/;
+const stripFillers = t => t.replace(FILLERS, '') || t;
+
+/** Match spoken words to a known genre value ("drum and bass" -> "drum & bass"; "hiphop" -> "hip-hop").
+    A near miss also matches when only one genre is that close ("lovi" -> "lofi"): one letter off
+    from 4 letters, two from 8. */
 function findGenre(genres) {
   const squash = s => normalize(s).replace(/[\s'-]+/g, '');
   const index = new Map(genres.map(g => [squash(g), g]));
-  return spoken => index.get(squash(spoken)) ?? null;
+  return spoken => {
+    const w = squash(spoken);
+    if (index.has(w)) return index.get(w);
+    const allowed = w.length >= 8 ? 2 : w.length >= 4 ? 1 : 0;
+    if (!allowed) return null;
+    const near = [...index].filter(([k]) => Math.abs(k.length - w.length) <= allowed && editDistance(k, w) <= allowed);
+    return near.length === 1 ? near[0][1] : null;
+  };
+}
+
+/** Levenshtein distance */
+export function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = row;
+  }
+  return prev[b.length];
 }

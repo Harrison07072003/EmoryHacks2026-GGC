@@ -34,7 +34,7 @@ export default function onlineSearch(root, app) {
   options.append(sayGenre, keyboard);
   const renderSay = () => {
     sayGenre.disabled = !voice.usable;
-    sayGenre.textContent = !voice.supported ? 'Voice not available in this browser' : voice.state === 'denied' ? 'Microphone blocked' : voice.state === 'listening' ? '🎤 Listening…' : '🎤 Say Genre';
+    sayGenre.textContent = !voice.supported ? 'Voice not available in this browser' : voice.state === 'denied' ? '🎤 Mic blocked: try again' : voice.state === 'starting' ? '🎤 Starting…' : voice.state === 'listening' ? (voice.hearing ? '🎤 Hearing you…' : '🎤 Listening…') : '🎤 Say Genre';
     sayGenre.classList.toggle('on', voice.state === 'listening');
   };
   const offSay = voice.onChange(renderSay);
