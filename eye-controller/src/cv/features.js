@@ -39,11 +39,10 @@ const FACE_IDS = { nose: 1, left: 234, right: 454, top: 10, chin: 152 };
 
 /**
  * Eye crop handed to the pupil finder: CROP.w x CROP.h pixels covering `span` eye-widths.
- * 128 px is about the eye's native size in a 1080p frame. At 64 px the eye was shrunk to
- * half resolution, and looking from the top band to the bottom moved the pupil ~1 pixel.
- * Only the precision changes with the size, not the meaning of the features.
+ * 128x64 was tried in v0.2: on a 720p webcam it added no detail (the eye is ~80 px wide),
+ * measured no accuracy gain, and raised frame time from ~28 ms to ~40 ms (30 -> 25 fps).
  */
-export const CROP = { w: 128, h: 64, span: 1.4 };
+export const CROP = { w: 64, h: 32, span: 1.4 };
 
 /**
  * Geometry of one eye from landmarks (normalized to the full video frame).

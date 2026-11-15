@@ -36,7 +36,13 @@ change one thing, re-score. Thresholds in `src/calibration/scoring.js`, `src/sig
 and `src/smoothing/gaze-smoother.js` are first estimates and are expected to move.
 
 ## Known open items
-- Vertical (top/bottom band) accuracy on real faces is the biggest risk; verify with recordings.
-- A smooth-pursuit calibration phase is not built yet and is the likely next accuracy lever.
+- Vertical (top/bottom band) accuracy on real faces is the biggest risk. Measured on one player
+  (2026-11-15): band switches on target ~60% with glasses, ~85% without; lane jumps ~75% / ~95%.
+- Calibration ends with an ~11 s moving-dot phase (v0.2). On real clips it raised the path
+  staying in the bottom band from 74% to 98%; it did not change jumps or switches.
+- Tried and reverted: 128x64 eye crops (no gain on a 720p webcam, 30 -> 25 fps). MediaPipe
+  eyeLook* blendshapes barely move vertically (recorded in clips, not used).
+- Using a player's past clips as a prior makes an 8-dot calibration usable but still well
+  below 16 dots; not shipped.
 - Firestore adapter for the pooled baseline and profiles is not built.
 - TypeScript is optional and not started.

@@ -68,6 +68,7 @@ function scorePath(frames, layout) {
     errorX: mean(fs.map(f => Math.abs(f.out.x - f.target.x))),
     errorY: mean(fs.map(f => Math.abs(f.out.y - f.target.y))),
     lagMs, errorAtLag: best,
+    inBand: mean(fs.map(f => +(f.out.band === 'bottom'))),   // the path is always in the bottom band
     lane: mean(lagged.map(({ f, tg }) => +(f.out.lane === laneOf(tg.x, layout.lanes)))),
     band: mean(lagged.map(({ f, tg }) => +(f.out.band === bandOf(tg.y, layout.bandSplit)))),
   };
@@ -83,7 +84,7 @@ function scoreGameFrames(frames, layout) {
  *          { replay: { jumps, path, switch }, live: {...} | null, calibrationScore }
  *          jumps / switch: { notes, hitRate, reactionMs, onTarget }
  *          path: { errorX, errorY (raw, lag included), lagMs (best-fitting delay),
- *                  errorAtLag (distance once that delay is removed), lane, band }
+ *                  errorAtLag (distance once that delay is removed), lane, band, inBand }
  */
 export function evaluatePlay(recording, { layout = DEFAULT_LAYOUT } = {}) {
   const game = recording.frames.filter(f => f.src === 'game');

@@ -64,10 +64,15 @@ Version 0.2 adds the moving dot to calibration, sharper eye images, and asks the
 
 In the **note** box type `v2` for every clip this round, so the files are easy to tell apart.
 
-- [ ] baseline × 5 (glasses on, normal setup, back to back)
+**Minimum (about 5 minutes): this is all that is needed to judge version 0.2.**
+
+- [ ] baseline × 3 (glasses on, normal setup, back to back)
+
+**Optional, if you have energy:**
+
 - [ ] noglasses × 2
-- [ ] drift5 × 2: right after a baseline that scored 60+, use the computer normally for
-      5 minutes, then select drift5 and press Record clip. The page now refuses if the
+- [ ] drift5 × 1: right after a baseline that scored 60+, use the computer normally for
+      5 minutes, then select drift5 and press Record clip. The page refuses if the
       current calibration did not pass.
 
 Then run the scoring (section 5) and tell Claude: "round 2 is in".
