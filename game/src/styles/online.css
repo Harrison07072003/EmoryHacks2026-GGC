@@ -1,6 +1,6 @@
 /* Online Library screens (search, keyboard, results). Uses the tokens from theme.css. */
 
-.song-search-btn { min-width: 260px; }
+
 
 /* ---- shared: search field, status, notices ---- */
 .os-slot { width: min(900px, 90vw); }
@@ -78,3 +78,14 @@
 /* attribution while playing an archive song, and on its results */
 .hud-attr { display: block; max-width: 46vw; margin-top: 4px; font: 500 12px var(--font-body); color: var(--text-dim); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 dd.hud-attr { max-width: 40vw; white-space: normal; }
+
+/* Corner buttons. In ui.css `.gbtn { position: relative }` comes after `.top-left/.top-right
+   { position: absolute }` with equal specificity, so shared corner buttons end up in the page
+   flow (at the bottom). Pin them on the Online Library screens only; the shared rule is left
+   alone because other screens are laid out around it. */
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-left,
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-right { position: absolute; top: calc(24px + env(safe-area-inset-top, 0px)); z-index: 5; }
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-left { left: 24px; }
+:is(.online-search, .online-keyboard, .online-results, .online-prepare) > .gbtn.top-right { right: 24px; }
+/* song select: the Search entry point sits in the top-right corner */
+.screen > .gbtn.song-search-btn { position: absolute; top: calc(24px + env(safe-area-inset-top, 0px)); right: 24px; z-index: 5; min-width: 200px; }
