@@ -14,8 +14,7 @@
     "test:watch": "vitest",
     "postinstall": "node scripts/copy-mediapipe.mjs",
     "replay": "node scripts/replay.mjs",
-    "fetch-model": "node scripts/fetch-model.mjs",
-    "setups": "node scripts/setups.mjs"
+    "fetch-model": "node scripts/fetch-model.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3"

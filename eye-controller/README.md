@@ -7,7 +7,6 @@ internals.
 ## Run
 
 **Recording clips?** Follow [docs/START-HERE.md](docs/START-HERE.md).
-**Finding the best seat / camera / screen angle?** Use the setup tester: [docs/SETUP-TESTER.md](docs/SETUP-TESTER.md).
 
 ```bash
 npm install     # also copies the MediaPipe wasm runtime into public/mediapipe/
@@ -213,7 +212,6 @@ src/storage/          key-value adapters, profiles, pooled baseline
 scripts/              copy-mediapipe (postinstall), fetch-model, replay, dev-server save plugin
 recordings/           recorded clips (written by the debug page)
 baselines/            exported pooled baselines
-src/setup/            setup tester maths: distance, camera height, eye range, setup score
 src/simulator/        fake eye, synthetic source, record / replay / evaluate
 src/telemetry/        buffered, retrying upload of per-frame samples to a database
 src/testrun/          scripted test run (jumps, path, band switches) and its full-screen player

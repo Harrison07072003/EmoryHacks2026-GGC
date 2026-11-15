@@ -7,6 +7,6 @@ import { saveRecordings } from './scripts/save-recordings-plugin.mjs';
 export default defineConfig({
   plugins: [saveRecordings()],
   server: { port: 5190, strictPort: true },
-  build: { rollupOptions: { input: { index: 'index.html', debug: 'debug.html', setup: 'setup.html' } } },
+  build: { rollupOptions: { input: { index: 'index.html', debug: 'debug.html' } } },
   test: { environment: 'node', include: ['test/**/*.test.js'] },
 });

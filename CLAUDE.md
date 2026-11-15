@@ -42,9 +42,9 @@ change one thing, re-score. Thresholds in `src/calibration/scoring.js`, `src/sig
 and `src/smoothing/gaze-smoother.js` are first estimates and are expected to move.
 
 ## Setup (seat / camera / screen)
-Accuracy depends most on how far the eyes visibly move across the screen (sit closer; glasses
-halve it). `setup.html` + `src/setup/setup-score.js` measure it; `npm run setups` compares saved
-setups and their linked test runs. Validate thresholds there before changing the game's face check.
+Accuracy depends most on how far the eyes visibly move across the screen: sit closer (face about
+a quarter of the camera width); glasses roughly halve it. A standalone setup tester was tried and
+removed (the debug page was more useful).
 
 ## Known open items
 - Vertical (top/bottom band) accuracy on real faces is the biggest risk. Measured on one player
