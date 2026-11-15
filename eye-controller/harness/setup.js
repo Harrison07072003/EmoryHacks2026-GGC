@@ -64,11 +64,13 @@ function runRangeTest() {
   });
 }
 
+// every range test saves itself (with the tags as they are now), so nothing is lost
 $('range').onclick = async () => {
   out('Range test: look at each dot…');
   range = await runRangeTest();
   const pct = v => (v == null ? '–' : v.toFixed(3));
-  out(`Range test done.\nleft-right eye range ${pct(range.h)} (good ≥ 0.15 without glasses, ≥ 0.10 with)\nup-down eye range ${pct(range.v)} (good ≥ 0.022)\n${rangeAdvice(range).join('\n') || 'Your eyes move well across the screen.'}`);
+  const where = await saveJson('setups', setupRecord(), label());
+  out(`Range test done, saved to ${where}\nleft-right eye range ${pct(range.h)} (good ≥ 0.15 without glasses, ≥ 0.10 with)\nup-down eye range ${pct(range.v)} (good ≥ 0.022)\n${rangeAdvice(range).join('\n') || 'Your eyes move well across the screen.'}`);
 };
 
 /** Everything about this setup, saved on its own and inside a linked test-run recording. */
@@ -78,9 +80,10 @@ const setupRecord = () => ({
 });
 const label = () => [player(), 'setup', slug(`${tags().distance}-${tags().camera}-${tags().tilt}${tags().glasses ? '-glasses' : ''}`)].join('-');
 
+// only needed if the description changed after the range test (it saves itself)
 $('save').onclick = async () => {
   if (!range) return out('Run the range test first: the eye range is what the setup score is mostly about.');
-  out(`Setup saved to ${await saveJson('setups', setupRecord(), label())}`);
+  out(`Setup saved again to ${await saveJson('setups', setupRecord(), label())}`);
 };
 
 $('run').onclick = async () => {

@@ -43,15 +43,15 @@
       <h2>Tests</h2>
       <button id="range" class="primary">Range test (6 s)</button>
       <button id="run">Calibrate + test run (~95 s)</button>
-      <h2>Describe this setup, then save</h2>
+      <h2>Describe this setup first (each range test saves it)</h2>
       <label>Player <input id="player" placeholder="e.g. jon"></label>
       <label>Distance <select id="distance"><option>normal</option><option>closer</option><option>much closer</option><option>further</option></select></label>
       <label>Camera <select id="camera"><option>laptop on desk</option><option>laptop raised</option><option>webcam on monitor</option><option>webcam below screen</option></select></label>
       <label>Screen tilt <select id="tilt"><option>upright</option><option>tilted back</option><option>tilted forward</option></select></label>
       <label>Glasses <select id="glasses"><option>no</option><option>yes</option></select></label>
       <label>Note <input id="note" placeholder="optional"></label>
-      <button id="save">Save setup</button>
-      <p class="hint">Setups save to <code>setups/</code>, test runs to <code>recordings/</code> (linked to the setup). <code>npm run setups</code> compares them. Add <code>?mock</code> to try without a camera.</p>
+      <button id="save">Save again (after changing the description)</button>
+      <p class="hint">Every range test saves to <code>setups/</code>; every test run saves to <code>recordings/</code> (linked to the setup). <code>npm run setups</code> compares them. Add <code>?mock</code> to try without a camera.</p>
     </aside>
   </main>
   <script type="module" src="/harness/setup.js"></script>

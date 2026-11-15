@@ -18,12 +18,13 @@ Open `http://localhost:5190/setup.html` in Chrome. (`?mock` tries it without a c
 
 ## One setup (about 2 minutes)
 
-1. Type your player name and describe the setup (distance, camera, screen tilt, glasses).
+1. Type your player name and describe the setup (distance, camera, screen tilt, glasses)
+   **before** testing: each test saves with it.
 2. Fix the red and yellow rows on the right: they say what to change and update live.
 3. **Range test (6 s):** look at the dot as it goes centre, left, right, top, bottom. Move only
-   your eyes. The score and advice update.
-4. **Save setup.**
-5. Optional but the most useful: **Calibrate + test run (~95 s)**. It records a full test
+   your eyes. The score and advice update, and **it saves itself** to `setups/` with the
+   description you typed (fill that in first; "Save again" re-saves if you change it after).
+4. Optional but the most useful: **Calibrate + test run (~95 s)**. It records a full test
    run linked to this setup, so we see how the setup actually played.
 
 ## Team session (about 15 minutes each)
