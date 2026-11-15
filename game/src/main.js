@@ -19,8 +19,9 @@ import play from './screens/play.js';
 import results from './screens/results.js';
 import settingsScreen from './screens/settings.js';
 import startupError from './screens/startup-error.js';
+import faceCheck from './screens/face-check.js';
 
-const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError };
+const SCREENS = { title, calibration, modes, characters, songs, play, results, settings: settingsScreen, startupError, faceCheck };
 
 const params = new URLSearchParams(location.search);
 const sourceName = SOURCES[params.get('input')] ? params.get('input') : 'live';
@@ -60,7 +61,7 @@ const cursor = document.getElementById('gaze-cursor');
 function frame(now) {
   const g = gaze.update();
   dwell.update(g);
-  cursor.classList.toggle('show', settings.showGazeCursor && gaze.calibrated && currentName !== 'calibration');
+  cursor.classList.toggle('show', settings.showGazeCursor && gaze.calibrated && currentName !== 'calibration' && currentName !== 'faceCheck');
   cursor.classList.toggle('lost', !g.valid);
   cursor.style.left = `${g.x * innerWidth}px`; cursor.style.top = `${g.y * innerHeight}px`;
   current?.frame?.(now);
@@ -76,6 +77,7 @@ function showSource() {
 // ---- testing keys (never required to play) ----
 addEventListener('keydown', e => {
   if (e.key === 'Escape') current?.onEscape?.();
+  else current?.onKey?.(e.key.toLowerCase());
 });
 
 function safeIndexedDb() {
@@ -90,7 +92,7 @@ gaze.onSourceChange(showSource);
 showSource();
 requestAnimationFrame(frame);
 try {
-  await gaze.init();
+  await gaze.init(document.getElementById('camera'));
   if (gaze.eyes && sourceName === 'live') await gaze.loadProfile();   // a saved calibration makes the menus usable straight away
   app.go('title');
 } catch (error) {

@@ -23,6 +23,7 @@
 @keyframes meter-glow { to { filter: brightness(1.5); } }
 
 .quit-btn { position: absolute; top: 18px; right: 18px; z-index: 6; min-width: 150px; min-height: 76px; }
+.pause-btn { position: absolute; top: 18px; right: 186px; z-index: 6; min-width: 150px; min-height: 76px; }
 
 /* Danger mode: edge glows only, so notes and targets stay readable. Slow pulses (<= 1 Hz). */
 .danger-vignette { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity 0.6s; }

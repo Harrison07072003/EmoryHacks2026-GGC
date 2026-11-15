@@ -33,9 +33,12 @@ number mentioned here lives in `src/config/game-config.js`.
 - Before any calibration exists, the gaze cannot press buttons yet. The title screen therefore
   starts calibration by itself once a face has been in view for 3 s (a click also works).
   After calibration everything is gaze-only.
-- Quit (upper right) pauses the song and offers Resume / Songs / Home rather than quitting
-  instantly, because a stray 2 s glance should not throw away a run. Resume rewinds 1 s and
-  counts in.
+- Pause and Quit sit in the upper right. Pause offers Resume / Songs / Home. Quit asks before
+  leaving, because a stray 2 s glance should not throw away a run. Resume rewinds 1 s and
+  counts in. The song also auto-pauses after 3 s without a face (`PAUSE` in the config).
+- The face check from the prototype (app/core/shell.js) was rebuilt on the eye-controller's
+  frame data (`src/input/face-check.js`, thresholds in `FACE_CHECK`) and runs before every
+  calibration.
 
 ## Judging
 

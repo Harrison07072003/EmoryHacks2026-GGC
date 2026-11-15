@@ -3,7 +3,7 @@
 // Song time comes from the AudioContext clock (the same clock that plays the music), minus
 // the output latency and the player's offset setting, so notes line up with what is heard.
 // If the browser is still blocking audio, the song plays silently on performance.now().
-import { COUNTDOWN_SEC, INPUT, LEAD_IN_SEC, MODES } from '../config/game-config.js';
+import { COUNTDOWN_SEC, INPUT, LEAD_IN_SEC, MODES, PAUSE } from '../config/game-config.js';
 import { CHARACTERS } from '../characters/characters.js';
 import { mountPortrait, startBlinking } from '../characters/portrait.js';
 import { songById, loadChart } from '../songs/index.js';
@@ -43,11 +43,11 @@ export default function play(root, app) {
   const portrait = mountPortrait(el, character);
   portrait.classList.add('character');
   const stopBlink = startBlinking(portrait);
-  const quitBtn = gazeButton('Quit', () => pause(), { cls: 'danger small quit-btn', sound: 'back' });
-  el.appendChild(quitBtn);
+  el.appendChild(gazeButton('Pause', () => pause(), { cls: 'purple small pause-btn' }));
+  el.appendChild(gazeButton('Quit', () => confirmQuit(), { cls: 'danger small quit-btn', sound: 'back' }));
 
   let state = 'loading', chart, judge, scoring, highway, buffer = null, stats, telemetry = null;
-  let clock = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
+  let clock = null, faceLostSince = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
   const noteState = new Map(), curveDone = new Set();
   const latency = () => (INPUT.gazeLatencyMs[gaze.latencyKey] ?? 0) / 1000;
 
@@ -101,19 +101,39 @@ export default function play(root, app) {
   }
 
   // ---- pause / quit ----
-  function pause() {
-    if (state !== 'playing' && state !== 'countdown') return;
-    const wasPlaying = state === 'playing';
-    if (wasPlaying) resumeAt = songTime() - 1;   // resume a second early so the player can find the notes again
+  /** Freeze the song. Returns false if there is nothing to pause. */
+  function halt() {
+    if (state !== 'playing' && state !== 'countdown') return false;
+    if (state === 'playing') resumeAt = songTime() - PAUSE.resumeRewindSec;   // resume a little early so the player can find the notes again
     state = 'paused';
     music.stop(0.08);
     clock = null;
+    gaze.setTarget(null);
+    return true;
+  }
+  const resume = () => countdown(resumeAt === null ? COUNTDOWN_SEC : PAUSE.resumeCountdownSec);
+
+  function pause(reason = '') {
+    if (!halt()) return;
     popup({
       title: 'Paused',
-      text: `${esc(song.title)} · ${esc(mode.label)}`,
+      text: reason || `${esc(song.title)} · ${esc(mode.label)}`,
       buttons: [
-        { label: 'Resume', onPress: () => countdown(wasPlaying ? 2 : COUNTDOWN_SEC) },
+        { label: 'Resume', onPress: resume },
         { label: 'Songs', cls: 'purple', sound: 'back', onPress: () => app.go('songs') },
+        { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
+      ],
+    });
+  }
+
+  function confirmQuit() {
+    if (!halt()) return;
+    popup({
+      title: 'Quit this song?',
+      text: 'Your progress in this song will be lost.',
+      buttons: [
+        { label: 'Keep playing', onPress: resume },
+        { label: 'Song select', cls: 'danger', sound: 'back', onPress: () => app.go('songs') },
         { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
       ],
     });
@@ -172,6 +192,13 @@ export default function play(root, app) {
         if (left !== lastCount && left > 0) { lastCount = left; $('.countdown').innerHTML = `<b>${left}</b>`; sfx.play('count'); }
         if (now >= countdownUntil) begin();
       }
+      // auto-pause when the player's face has been gone for a while (live tracking only)
+      const tracking = gaze.eyes && !gaze.mouseOverride && PAUSE.autoPauseOnFaceLostSec > 0;
+      faceLostSince = state === 'playing' && tracking && !gaze.faceVisible ? (faceLostSince ?? now) : null;
+      if (faceLostSince !== null && now - faceLostSince > PAUSE.autoPauseOnFaceLostSec * 1000) {
+        faceLostSince = null;
+        pause('Your face left the camera view. Sit back in front of the camera, then look at Resume.');
+      }
       if (state === 'playing') {
         const jt = t - latency();
         for (const j of judge.update(jt, gaze.gaze)) { onJudgment(j, t); if (state !== 'playing') break; }
@@ -200,6 +227,7 @@ export default function play(root, app) {
       highway.draw({ now: t, notes: chart.notes, noteState, curveOnPath: judge.curveOnPath(), curveDone, gaze: gaze.gaze, activeLanes: judge.activeLanes(), frenzy: s.frenzyActive });
     },
     onEscape: () => pause(),
+    onKey: key => { if (key === 'p') pause(); },
     unmount() {
       if (state === 'playing' || state === 'countdown' || state === 'paused') telemetry?.stop();
       state = 'gone';

@@ -26,6 +26,8 @@ export function createGazeInput(source = 'live') {
   const mouse = { x: 0.5, y: 0.5, seen: false };
   let override = source === 'mouse';
   const listeners = new Set();
+  let lastFrame = null;
+  eyes?.onSample(sample => { lastFrame = sample.frame; });
 
   addEventListener('pointermove', e => { mouse.x = e.clientX / innerWidth; mouse.y = e.clientY / innerHeight; mouse.seen = true; });
   addEventListener('keydown', e => {
@@ -39,7 +41,12 @@ export function createGazeInput(source = 'live') {
     get mouseOverride() { return override; },
     onSourceChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-    async init() { if (eyes) await eyes.init(); },
+    /** @param videoEl  the page's camera <video> (live only): the face check shows it */
+    async init(videoEl) { if (eyes) await eyes.init(source === 'live' ? videoEl : undefined); },
+    /** Latest eye-controller frame (face box, eye glare / brightness, exposure), or null. */
+    get frame() { return lastFrame; },
+    /** True when a real camera image exists to show (live webcam only). */
+    get hasCamera() { return source === 'live'; },
 
     /** A calibration exists this page load (score may still be below the play threshold). */
     get calibrated() { return override || !eyes ? true : eyes.state.calibrationScore !== null; },

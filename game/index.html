@@ -13,6 +13,8 @@
 </head>
 <body>
   <div id="bg" aria-hidden="true"></div>
+  <!-- the webcam: must stay in the page for Chrome to keep delivering frames; the face check shows it -->
+  <video id="camera" muted playsinline aria-hidden="true"></video>
   <main id="app"></main>
   <div id="overlay-layer"></div>
   <div id="gaze-cursor" aria-hidden="true"></div>

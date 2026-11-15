@@ -17,7 +17,7 @@ describe('first-run calibration flow (simulated gaze)', () => {
     const param = () => ({ value: 1, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {} });
     const node = () => ({ playbackRate: param(), gain: { value: 1, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {} }, connect(n) { return n ?? this; }, start() {}, stop() {} });
     globalThis.AudioContext = class { state = 'running'; destination = node(); get currentTime() { return performance.now() / 1000; } createGain() { return node(); } createBufferSource() { return node(); } createBuffer(c, n) { const d = new Float32Array(n); return { getChannelData: () => d }; } resume() { return Promise.resolve(); } };
-    HTMLCanvasElement.prototype.getContext = () => null;
+    HTMLCanvasElement.prototype.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true });
     globalThis.fetch = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
     document.body.innerHTML = '<main id="app"></main><div id="overlay-layer"></div><div id="gaze-cursor"></div><div id="dwell-ring"><div class="pie"></div></div><div id="input-badge"></div><div id="toast"></div>';
     history.replaceState({}, '', '/?input=sim');
@@ -28,7 +28,9 @@ describe('first-run calibration flow (simulated gaze)', () => {
     expect(app.gaze.calibrated).toBe(false);
     expect(document.querySelector('#input-badge').textContent).toMatch(/SIMULATED/);
 
-    await until(() => app.screen === 'calibration', 6000);          // auto-start after ~3 s of face
+    await until(() => app.screen === 'faceCheck', 6000);            // auto-start after ~3 s of face
+    expect(document.querySelector('.fc-checks').textContent).toMatch(/Centered/);
+    await until(() => app.screen === 'calibration', 6000);          // all checks green for 1.5 s -> continues by itself
     await until(() => document.querySelector('.calib .dot'), 6000);  // dots are being shown
     await until(() => !document.querySelector('.calib'), 90000);     // engine finished all dots + follow phase
     expect(app.gaze.calibrationScore).toBeGreaterThanOrEqual(60);

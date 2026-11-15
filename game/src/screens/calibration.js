@@ -12,12 +12,14 @@ const INTRO_MS = 1800;
 const INTRO_MS_WITH_SKIP = 4500;   // long enough to dwell 2 s on Skip before the dots start
 const AUTO_CONTINUE_MS = 4000;
 
-export default function calibration(root, app, { kind = 'full', next = 'modes', nextParams = {} }) {
+export default function calibration(root, app, { kind = 'full', next = 'modes', nextParams = {}, positioned = false }) {
   const { gaze, dwell, store } = app;
   const proceed = () => app.go(next, nextParams);
 
   // mouse-as-gaze has nothing to calibrate
   if (!gaze.eyes || gaze.mouseOverride) { app.session.calibratedThisSession = true; queueMicrotask(proceed); return {}; }
+  // the face check (camera view, adjust your head) always comes first
+  if (!positioned) { queueMicrotask(() => app.go('faceCheck', { next: 'calibration', nextParams: { kind, next, nextParams, positioned: true } })); return {}; }
 
   const quick = kind !== 'full';
   const previousScore = gaze.calibrationScore;
@@ -85,8 +87,8 @@ export default function calibration(root, app, { kind = 'full', next = 'modes', 
         : `Score <b>${result.score}</b>/100 (needs ${CALIBRATION.minScore}). Try more light on your face, less glare on glasses, and keep your head still.`;
     ring.style.display = okResult ? '' : 'none';
     buttons.replaceChildren(
-      gazeButton(okResult ? 'Continue' : 'Try again', okResult ? proceed : () => { phase = 'intro'; faceSince = null; buttons.replaceChildren(); el.querySelector('h2').textContent = 'Calibration'; ring.style.display = ''; }),
-      ...(okResult ? [gazeButton('Recalibrate', () => app.go('calibration', { kind: 'full', next, nextParams }), { cls: 'purple small' })]
+      gazeButton(okResult ? 'Continue' : 'Try again', okResult ? proceed : () => app.go('calibration', { kind, next, nextParams })),   // back through the face check
+      ...(okResult ? [gazeButton('Recalibrate', () => app.go('calibration', { kind: 'full', next, nextParams, positioned: true }), { cls: 'purple small' })]
         : [gazeButton('Continue anyway', () => { app.session.calibratedThisSession = true; proceed(); }, { cls: 'danger small' })]),
     );
   }

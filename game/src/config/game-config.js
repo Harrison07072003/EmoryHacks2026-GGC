@@ -114,6 +114,24 @@ export const CALIBRATION = {
   keepWorseBy: 8,         // a between-song recalibration that scores this much lower than the saved one is discarded
 };
 
+/** Face check before calibration (camera view with an oval guide). Box values are 0-1 of the camera frame. */
+export const FACE_CHECK = {
+  holdSec: 1.5,           // all required checks green this long -> continue by itself
+  maxOffsetX: 0.15,       // face centre may be this far from the middle, left/right
+  maxOffsetY: 0.2,        // and up/down
+  minWidth: 0.2,          // face narrower than this = too far away
+  maxWidth: 0.5,          // wider than this = too close
+  minLight: 50,           // mean brightness of the face, 0-255 (before the engine's auto-exposure)
+  maxGlare: 0.03,         // share of blown-out pixels in an eye (glasses reflections); a warning only
+};
+
+/** Pausing during a song. */
+export const PAUSE = {
+  autoPauseOnFaceLostSec: 3,   // pause by itself when no face is seen this long (0 = never)
+  resumeRewindSec: 1,          // resume this far back so the player can find the notes again
+  resumeCountdownSec: 2,
+};
+
 export const COUNTDOWN_SEC = 3;
 export const LEAD_IN_SEC = 1.0;        // silence before the audio starts so the first notes can travel in
 export const MISSED_NOTE_TRAIL_SEC = 0.45; // missed notes keep sliding this long before fading out

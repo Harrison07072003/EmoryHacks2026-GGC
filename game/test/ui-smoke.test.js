@@ -107,16 +107,32 @@ describe('UI walk-through (mouse input, simulated DOM)', () => {
     expect(app.debugPlay.scoring().health).toBeLessThan(100);
   }, 15000);
 
-  it('Quit pauses with Resume / Songs / Home, and Resume continues', async () => {
-    byText('.gbtn', 'Quit').click();
+  it('Pause freezes the song (Resume / Songs / Home) and Resume continues', async () => {
+    byText('.gbtn', 'Pause').click();
     await until(() => $('.popup'));
     expect(app.debugPlay.state()).toBe('paused');
     expect($$('.popup .gbtn').map(b => b.textContent)).toEqual(['Resume', 'Songs', 'Home']);
+    const frozen = app.debugPlay.scoring().counts.miss;
+    await sleep(1200);
+    expect(app.debugPlay.scoring().counts.miss).toBe(frozen);   // nothing is judged while paused
     byText('.popup .gbtn', 'Resume').click();
+    await until(() => app.debugPlay.state() === 'playing', 4000);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }));   // P also pauses (testing key)
+    await until(() => $('.popup'));
+    byText('.popup .gbtn', 'Resume').click();
+    await until(() => app.debugPlay.state() === 'playing', 4000);
+  }, 20000);
+
+  it('Quit asks first: Keep playing / Song select / Home', async () => {
+    byText('.gbtn', 'Quit').click();
+    await until(() => $('.popup'));
+    expect(app.debugPlay.state()).toBe('paused');
+    expect($$('.popup .gbtn').map(b => b.textContent)).toEqual(['Keep playing', 'Song select', 'Home']);
+    byText('.popup .gbtn', 'Keep playing').click();
     await until(() => app.debugPlay.state() === 'playing', 4000);
     byText('.gbtn', 'Quit').click();
     await until(() => $('.popup'));
-    byText('.popup .gbtn', 'Songs').click();
+    byText('.popup .gbtn', 'Song select').click();
     await until(() => app.screen === 'songs');
   }, 15000);
 

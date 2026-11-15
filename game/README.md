@@ -55,6 +55,12 @@ pause or goes back.
 
 ## How to play
 
+- **Face check (before every calibration):** you see yourself in a mirrored camera view with an
+  oval. Move until every line is green (face found, centered, distance, lighting; glasses glare
+  is only a warning). After 1.5 s of all-green it continues by itself.
+- **Pause:** the Pause button (top right) freezes the song: Resume / Songs / Home. Quit asks
+  before leaving. The song also pauses by itself if your face is out of view for 3 s. Resume
+  rewinds 1 s and counts in.
 - **Menus:** look at a button. A pie fills clockwise; after **2 seconds** it presses.
   Look away and it drains back down.
 - **Straight notes** slide down the perspective highway to the **upper glowing line**. Look at
