@@ -50,6 +50,8 @@ Built-in songs never need any of this. Run inside `game/` (`cd game`):
 | `npm run server` | level-generator server on port 8787 (own terminal, keep running) |
 | `npm run dev` | the game (restart it after editing `.env`) |
 | `npm run typesense:stop` | stops the search engine |
+| `npm run typesense:seed` | exports your songs to `server/typesense/songs.jsonl` for the live site (commit it) |
+| `npm run render:keys` | once: makes the keys for the Render search service (see `game/server/typesense/README.md`) |
 
 In the game: song select → **🔍 Search** → *Say genre* (voice) or *Keyboard* (type with your
 eyes). **Alt+M** toggles the mic. Voice runs offline in the browser (Vosk model, any browser,

@@ -22,7 +22,9 @@
     "server": "node server/index.js",
     "server:install": "npm --prefix server ci",
     "test:online": "ONLINE_IT=1 vitest run test/online-integration.test.js",
-    "fetch-voice-model": "node tools/fetch-voice-model.mjs"
+    "fetch-voice-model": "node tools/fetch-voice-model.mjs",
+    "typesense:seed": "node tools/typesense-seed.mjs",
+    "render:keys": "node tools/render-keys.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3",
