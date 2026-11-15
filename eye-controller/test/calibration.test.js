@@ -175,6 +175,11 @@ describe('dots check where the player looks', () => {
     expect(cheat.ms).toBeGreaterThan(honest.ms + 10000);
     expect(cheat.info.some(i => i.index >= 6 && i.stage === 'capturing' && i.onTarget === false)).toBe(true);
   });
+  it('corner dots rely on steadiness only, so a steady look near them locks', () => {
+    // dots 12-15 are the corners; look a little off each (as the early model would mis-place it)
+    const { session } = run(i => (i >= 12 ? { x: defaultTargets()[i].x < 0.5 ? 0.2 : 0.8, y: defaultTargets()[i].y < 0.5 ? 0.2 : 0.8 } : null));
+    expect(session.points.slice(12, 16).every(p => !p.weak && !p.offTarget)).toBe(true);
+  });
   it('the first two dots cannot be checked yet and rely on steadiness', () => {
     const { info } = run(() => null);
     expect(info.filter(i => i.index < 2 && i.stage === 'capturing').every(i => i.onTarget === true)).toBe(true);

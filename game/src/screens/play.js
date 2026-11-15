@@ -1,6 +1,7 @@
 // The play screen: song clock, judging, scoring, effects, character, pause/quit.
-// When tracking drifts (live quality stays low) or the face is gone, the song pauses itself;
-// the pause menu offers a quick recalibration that runs on top of the song and resumes it.
+// When tracking drifts (live quality stays low) the song pauses and goes straight into a quick
+// recalibration after a 3 s notice (cancel = resume); it runs on top of the song and resumes it.
+// When the face is gone the song pauses; the pause menu also offers Quick recalibrate.
 //
 // Song time comes from the AudioContext clock (the same clock that plays the music), minus
 // the output latency and the player's offset setting, so notes line up with what is heard.
@@ -118,21 +119,38 @@ export default function play(root, app) {
 
   const canRecalibrate = () => !!gaze.eyes && !gaze.manualMouse;
 
-  /** @param recalibrateFirst  put Quick recalibrate first (tracking drifted) */
-  function pause(reason = '', { recalibrateFirst = false } = {}) {
+  function pause(reason = '') {
     if (!halt()) return;
-    const recal = canRecalibrate() ? [{ label: 'Quick recalibrate', cls: recalibrateFirst ? '' : 'purple', onPress: recalibrateAndResume }] : [];
     popup({
       title: 'Paused',
       text: reason || `${esc(song.title)} · ${esc(mode.label)}`,
       buttons: [
-        ...(recalibrateFirst ? recal : []),
-        { label: 'Resume', cls: recalibrateFirst ? 'purple' : '', onPress: resume },
-        ...(recalibrateFirst ? [] : recal),
+        { label: 'Resume', onPress: resume },
+        ...(canRecalibrate() ? [{ label: 'Quick recalibrate', cls: 'purple', onPress: recalibrateAndResume }] : []),
         { label: 'Songs', cls: 'purple', sound: 'back', onPress: () => app.go('songs') },
         { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
       ],
     });
+  }
+
+  /** Pause, show a short notice (cancel = resume), then recalibrate on top of the song. */
+  function driftRecalibrate() {
+    if (!canRecalibrate() || !halt()) return;
+    let left = DRIFT.noticeSec, timer = 0;
+    const notice = popup({
+      title: 'Tracking drifted',
+      text: `Recalibrating in <b data-left>${left}</b>… (you may have moved, or the light changed)`,
+      buttons: [{ label: 'Cancel', cls: 'purple', onPress: () => { clearInterval(timer); resume(); } }],
+    });
+    timer = setInterval(() => {
+      left--;
+      const el = notice.el.querySelector('[data-left]');
+      if (el) el.textContent = left;
+      if (left > 0) return;
+      clearInterval(timer);
+      notice.close();
+      recalibrateAndResume();
+    }, 1000);
   }
 
   /** The engine's quick calibration on top of the paused song, then a short countdown back in. */
@@ -142,6 +160,7 @@ export default function play(root, app) {
     if (state === 'gone') return;
     state = 'paused';
     if (r.aborted) return pause('Recalibration cancelled.');
+    if (gaze.mouseLocked) app.toast('Playing with the mouse: eye input comes back when a calibration passes', 4000);
     driftSince = null; faceLostSince = null;
     resume();
   }
@@ -219,19 +238,16 @@ export default function play(root, app) {
         faceLostSince = null;
         pause('Your face left the camera view. Sit back in front of the camera, then look at Resume.');
       }
-      // auto-pause when tracking has drifted (head moved, light changed): offer a quick recalibration
+      // tracking drifted (head moved, light changed): straight into a quick recalibration
       driftSince = state === 'playing' && tracking && gaze.faceVisible && gaze.quality < DRIFT.qualityBelow ? (driftSince ?? now) : null;
-      if (driftSince !== null && now - driftSince > DRIFT.sustainSec * 1000) {
-        driftSince = null;
-        pause('Tracking has drifted (you may have moved, or the light changed). A quick recalibration takes about 20 seconds, then the song carries on.', { recalibrateFirst: true });
-      }
+      if (driftSince !== null && now - driftSince > DRIFT.sustainSec * 1000) { driftSince = null; driftRecalibrate(); }
       if (state === 'playing') {
         const jt = t - latency();
         for (const j of judge.update(jt, gaze.gaze)) { onJudgment(j, t); if (state !== 'playing') break; }
         for (const e of scoring.tick(t)) if (e === 'frenzyEnd') { el.classList.remove('frenzy'); portrait.classList.remove('frenzy'); }
         const target = currentTarget(jt);
         gaze.setTarget(target?.point ?? null, target?.note.id ?? null);
-        stats.add(target, gaze.gaze);
+        stats.add(target, gaze.gaze, gaze.cell, jt);
         if (state === 'playing' && judge.isDone() && t > chart.duration + 0.8) { sfx.play('complete'); finishOrFail(false, t); }
       }
       // HUD

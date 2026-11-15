@@ -30,10 +30,7 @@ const settings = loadSettings();
 const audio = createAudioEngine(settings);
 const sfx = createSfx(audio);
 const music = createMusic(audio);
-const gaze = createGazeInput(sourceName, {
-  mouseMode: () => settings.mouseMode,
-  onMouseTakeover: () => toast('Mouse took over: eye input is off until you recalibrate (Settings → Mouse to change this)', 4500),
-});
+const gaze = createGazeInput(sourceName, { mouseMode: () => settings.mouseMode, pool: settings.usePool });
 const dwell = createDwell({ ring: document.getElementById('dwell-ring'), sfx });
 const remoteCfg = supabaseConfig();
 const store = createGameStore(safeIndexedDb(), remoteCfg ? createSupabaseClient(remoteCfg) : null);
@@ -44,7 +41,7 @@ let current = null, currentName = null;
 
 const app = {
   gaze, dwell, audio, sfx, music, store, settings,
-  session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false },
+  session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false, failedCalibrations: 0 },
   saveSettings() { saveSettings(settings); audio.setVolumes(settings); },
   toast,
   get screen() { return currentName; },

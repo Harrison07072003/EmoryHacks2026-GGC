@@ -3,7 +3,7 @@
 // (input/calibration-flow.js): dots that check you are looking, a moving dot, band hops,
 // the mini camera, and a per-area result you can press with your eyes.
 //
-// params: kind  'full' | 'quick' (between songs) | 'auto' (quick if a pooled baseline exists)
+// params: kind  'full' | 'quick' (between songs: 8 dots on top of the current calibration)
 //         next / nextParams  where to go afterwards
 import { CALIBRATION } from '../config/game-config.js';
 import { runEngineCalibration, cancelEngineCalibration } from '../input/calibration-flow.js';

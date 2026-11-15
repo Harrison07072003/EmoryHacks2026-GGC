@@ -1,5 +1,5 @@
-// Title screen. Before any calibration exists the gaze cannot press buttons yet, so Start
-// also triggers by itself once a face has been steadily in view for a few seconds.
+// Title screen. Every session starts with the face check and a full calibration, by itself:
+// once a face has been steadily in view for a few seconds it goes, no button needed.
 import { CHARACTERS, CHARACTER_ORDER } from '../characters/characters.js';
 import { mountPortrait, startBlinking } from '../characters/portrait.js';
 import { gazeButton, html } from './ui.js';
@@ -22,8 +22,9 @@ export default function title(root, app) {
     </section>`);
   root.appendChild(el);
 
+  const needsCalibration = () => !app.session.calibratedThisSession && !!gaze.eyes && !gaze.manualMouse;
   const start = () => {
-    if (!app.session.calibratedThisSession && gaze.eyes) app.go('calibration', { kind: gaze.calibrated ? 'auto' : 'full', next: 'modes' });
+    if (needsCalibration()) app.go('calibration', { kind: 'full', next: 'modes' });
     else app.go('modes');
   };
   const buttons = el.querySelector('[data-buttons]');
@@ -45,8 +46,8 @@ export default function title(root, app) {
       cal.innerHTML = gaze.calibrationScore === null ? (gaze.eyes ? 'not calibrated yet' : '')
         : `calibration <span class="${gaze.calibrationOk ? 'ok' : 'bad'}">${gaze.calibrationScore}/100</span>`;
       sound.innerHTML = app.audio.running ? '' : '<span class="bad">sound starts after one click or key press</span>';
-      // hands-free start: no calibration yet means the eyes cannot press buttons
-      const needsAuto = gaze.eyes && !gaze.calibrated && !gaze.mouseOverride;
+      // hands-free start: each session calibrates first, by itself
+      const needsAuto = needsCalibration();
       auto.style.display = needsAuto ? '' : 'none';
       if (!needsAuto) return;
       faceSince = gaze.faceVisible ? (faceSince ?? now) : null;

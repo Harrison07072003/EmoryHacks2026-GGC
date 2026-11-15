@@ -3,17 +3,22 @@
 // and pressable with the eyes (their buttons carry data-gaze, so the game's dwell presses them).
 // Used by the calibration screen and by the play screen's in-song quick recalibration.
 import { showCalibrationResult, VERSIONS } from '../../../eye-controller/src/index.js';
-import { CALIBRATION } from '../config/game-config.js';
+import { CALIBRATION, MOUSE } from '../config/game-config.js';
+import { popup } from '../screens/ui.js';
 
 const layer = () => document.getElementById('overlay-layer');
 const appEl = () => document.getElementById('app');
 
 /**
- * @param options  quick: the short between-songs version
+ * Redo on the result screen always runs a full calibration. After MOUSE.offerAfterFailures
+ * failed calibrations in a row (score below the pass mark) the game offers to play with the
+ * mouse until a calibration passes.
+ * @param options  quick: the short between-songs version (8 dots on top of the current calibration)
  * @returns { aborted } | { ok, score, kept }   kept: a worse quick run was thrown away and the
  *          previous calibration restored
  */
-export async function runEngineCalibration(app, { quick = false } = {}) {
+export async function runEngineCalibration(app, { quick: quickRun = false } = {}) {
+  let quick = quickRun;
   const { gaze, dwell, store } = app;
   const eyes = gaze.eyes, previousScore = gaze.calibrationScore;
   gaze.watchMouse(false);            // moving the mouse during calibration must not take over
@@ -42,14 +47,32 @@ export async function runEngineCalibration(app, { quick = false } = {}) {
         area: layer(), theme: 'neon', keys: false, buttonClass: 'gbtn small', layout: gaze.layout,
         minScore: CALIBRATION.minScore, autoMs: CALIBRATION.resultAutoMs,
       });
-      if (choice === 'continue') return { ok: result.ok, score: result.score, kept: false };
+      if (!result.ok) app.session.failedCalibrations = (app.session.failedCalibrations ?? 0) + 1;
+      else app.session.failedCalibrations = 0;
+      if (choice === 'continue') {
+        if (!result.ok && app.session.failedCalibrations >= MOUSE.offerAfterFailures && await offerMouse()) gaze.enableEmergencyMouse();
+        return { ok: result.ok, score: result.score, kept: false };
+      }
       topUp = choice === 'topup';
+      if (choice === 'retry') quick = false;   // a redo is always the full calibration
     }
   } finally {
     dwell.setEnabled(true);
     appEl().inert = false;
     gaze.watchMouse(true);
   }
+}
+
+/** Calibration keeps failing: offer the mouse. Resolves true if the player takes it. */
+function offerMouse() {
+  return new Promise(resolve => popup({
+    title: 'Eye tracking is struggling',
+    text: 'Calibration did not pass twice in a row. You can play with the mouse for now: eye input comes back as soon as a calibration passes.',
+    buttons: [
+      { label: 'Use the mouse', onPress: () => resolve(true) },
+      { label: 'Keep using my eyes', cls: 'purple', onPress: () => resolve(false) },
+    ],
+  }));
 }
 
 /** Cancel a running calibration (Escape, leaving the screen). */

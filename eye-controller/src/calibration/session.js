@@ -2,7 +2,7 @@
 // timers), so the simulator and recorded sessions run through exactly the same code.
 //
 // Each target is held until the last `minSamples` frames are steady enough (`steadyBar`)
-// AND, from the 3rd dot on, the eyes are actually on it: a left/right fit from the dots so
+// AND, from the 3rd dot on (corners excepted), the eyes are actually on it: a left/right fit from the dots so
 // far (3rd-5th dot), then a provisional model of both axes (6th dot on). Tolerances come
 // from 518 recorded dots: 94-97% of real attempts pass at once; looking 0.35+ away is
 // caught ~87% of the time. Looking away only delays a dot (it goes weak after maxCaptureMs).
@@ -104,7 +104,10 @@ export class CalibrationSession {
     }
     const fill = this.buf.length / this.minSamples;
     const steadiness = this.buf.length >= 3 ? steadinessOf(this.buf) : 0;
-    const look = this.checker && this.buf.length >= 3 ? this.checker(this.buf.slice(-6), this.target, this.dotTolerance) : null;
+    // corner dots sit outside the lanes, where the early model can only guess (in recorded
+    // sessions only 48% locked with the check): they rely on steadiness alone
+    const checkable = this.checker && this.buf.length >= 3 && !isCorner(this.target);
+    const look = checkable ? this.checker(this.buf.slice(-6), this.target, this.dotTolerance) : null;
     const onTarget = look ? look.ok : true;   // no check possible yet (first dots): steadiness only
     if (fill >= 0.5) {
       const window = { samples: [...this.buf], steadiness, rank: steadiness * fill };
@@ -202,6 +205,9 @@ function provisionalModel(points) {
   }, createGram(FEATURE_COUNT));
   return fitGazeModel(gram, { only: 'both' });
 }
+
+/** Outside the lanes and bands: the calibration corners. */
+const isCorner = t => t.x < 0.1 || t.x > 0.9 || t.y < 0.1 || t.y > 0.9;
 
 const meanOf = (xs, fn) => xs.reduce((a, x) => a + fn(x), 0) / xs.length;
 /** Horizontal eye signal: iris and pupil position along the eye, both eyes. */

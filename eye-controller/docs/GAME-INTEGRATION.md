@@ -4,7 +4,9 @@
 > the engine's face view and checks in its face-check screen, the engine's calibration and
 > result screens via `game/src/input/calibration-flow.js` (theme `'neon'`, `keys: false`,
 > buttons pressed by the game's dwell), `cancelCalibration()`, shorter quick calibrations
-> (`hops: 4`), drift auto-pause with in-song quick recalibration, and the mouse modes.
+> (`hops: 4`), drift straight into an in-song quick recalibration, and the mouse modes.
+> Since v0.6.1 a quick calibration builds on the player's own current calibration, the pool
+> is opt-in for the game (`pool: false`), and corner dots are not gaze-checked.
 > The notes below explain the engine side.
 
 ## Eye-controller v0.4+: what is new for the game

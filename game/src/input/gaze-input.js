@@ -10,10 +10,10 @@
 // Shift+M toggles a mouse override at runtime for testing; it is always labelled on screen.
 //
 // Mouse next to the eyes (settings.mouseMode, see MOUSE in game-config.js):
-//   emergency  deliberate mouse movement takes over and turns eye input off until the next
-//              successful calibration (for when tracking is unusable mid-game)
+//   off        (default) the mouse never drives (except the dev sources above)
 //   assist     eyes first; the mouse drives only while it is moving or the face is lost
-//   off        the mouse never drives (except the dev sources above)
+// Emergency mouse is not a setting: after two failed calibrations in a row the game offers it
+// (enableEmergencyMouse); eye input then stays off until the next successful calibration.
 import { createEyeController, createMockEyeController } from '../../../eye-controller/src/index.js';
 import { CALIBRATION, LAYOUT, MOUSE } from '../config/game-config.js';
 
@@ -24,18 +24,18 @@ export const SOURCES = {
 };
 
 /**
- * @param options  mouseMode: () => 'emergency' | 'assist' | 'off' (read live, so Settings apply at once)
- *                 onMouseTakeover: called when emergency mode hands control to the mouse
+ * @param options  mouseMode: () => 'off' | 'assist' (read live, so Settings apply at once)
+ *                 pool: warm-start calibrations from the shared pooled baseline (default false)
  */
-export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defaultMode, onMouseTakeover = () => {} } = {}) {
+export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defaultMode, pool = false } = {}) {
   const layout = { lanes: LAYOUT.lanes, bandSplit: LAYOUT.bandSplit };
-  const eyes = source === 'live' ? createEyeController({ layout, minScore: CALIBRATION.minScore })
-    : source === 'sim' ? createMockEyeController({ layout, minScore: CALIBRATION.minScore, autoCalibrate: false })
+  const eyes = source === 'live' ? createEyeController({ layout, minScore: CALIBRATION.minScore, pool })
+    : source === 'sim' ? createMockEyeController({ layout, minScore: CALIBRATION.minScore, autoCalibrate: false, pool })
       : null;
   const gaze = { x: 0.5, y: 0.5, valid: false };
   const mouse = { x: 0.5, y: 0.5, seen: false, activeAt: -Infinity, travel: [] };
   let override = source === 'mouse';   // dev: Shift+M or ?input=mouse
-  let mouseLock = false;               // emergency takeover, until the next calibration
+  let mouseLock = false;               // emergency mouse (chosen after failed calibrations), until the next good one
   let watching = true, driver = override ? 'mouse' : 'eyes';
   const listeners = new Set(), notify = () => listeners.forEach(f => f());
   let lastFrame = null;
@@ -49,11 +49,9 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
       while (mouse.travel.length && now - mouse.travel[0].t > MOUSE.takeoverWindowMs) mouse.travel.shift();
     }
     Object.assign(mouse, { x, y, seen: true });
-    // live webcam only: on simulated eyes (?input=sim) the mouse is how you look
+    // assist mode, live webcam only (on simulated eyes the mouse is how you look)
     if (!watching || source !== 'live' || override || e.pointerType === 'touch') return;
-    if (mouse.travel.reduce((a, s) => a + s.d, 0) < MOUSE.takeoverPx) return;
-    mouse.activeAt = now;
-    if (mouseMode() === 'emergency' && !mouseLock) { mouseLock = true; notify(); onMouseTakeover(); }
+    if (mouse.travel.reduce((a, s) => a + s.d, 0) >= MOUSE.assistTravelPx) mouse.activeAt = now;
   });
   addEventListener('keydown', e => {
     if (e.key === 'M' && e.shiftKey && source !== 'mouse') { override = !override; notify(); }
@@ -71,7 +69,7 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
     source, eyes, gaze, layout,
     get sourceInfo() {
       if (override && source !== 'mouse') return { label: 'DEV: MOUSE OVERRIDE (Shift+M)', dev: true };
-      if (mouseLock) return { label: 'MOUSE: eye input off until you recalibrate', dev: false, warn: true };
+      if (mouseLock) return { label: 'MOUSE: eye input off until a calibration passes', dev: false, warn: true };
       if (driver === 'mouse' && source !== 'mouse') return { label: 'MOUSE ASSIST', dev: false, warn: true };
       return SOURCES[source];
     },
@@ -80,7 +78,7 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
     get mouseOverride() { return driver === 'mouse'; },
     /** Dev override only (Shift+M / ?input=mouse): nothing to calibrate. */
     get manualMouse() { return override; },
-    /** Emergency takeover is on: eye input stays off until a calibration succeeds. */
+    /** Emergency mouse is on: eye input stays off until a calibration succeeds. */
     get mouseLocked() { return mouseLock; },
     onSourceChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
@@ -98,6 +96,9 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
     get faceVisible() { return driver === 'mouse' ? true : eyes.state.faceVisible; },
     get quality() { return driver === 'mouse' ? 100 : eyes.state.quality; },
 
+    /** The tracker's reported lane / band (null while the mouse drives): for tracking stats. */
+    get cell() { return driver === 'eyes' && eyes ? { lane: eyes.state.lane, band: eyes.state.band } : null; },
+
     /** Call once per animation frame before reading `gaze`. */
     update() {
       const next = pickDriver(performance.now());
@@ -111,6 +112,8 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
 
     /** Pause / resume the mouse watch (calibration turns it off: moving the mouse there is fine). */
     watchMouse(on) { watching = on; mouse.travel = []; },
+    /** Emergency mouse: the player chose it after calibration kept failing. */
+    enableEmergencyMouse() { if (!mouseLock) { mouseLock = true; notify(); } },
     /** A successful calibration hands control back to the eyes. */
     clearMouseLock() { if (mouseLock) { mouseLock = false; mouse.activeAt = -Infinity; notify(); } },
 

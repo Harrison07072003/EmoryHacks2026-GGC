@@ -129,7 +129,9 @@ smoothing, lane hysteresis, quality and calibration all behave like the live mod
    `minScore` (default 60) `ok` is false, `ready` stays false and no lanes are reported.
 4. Offer `startCalibration({ topUp: true })`: it re-captures only `weakCells` (two dots
    each) and merges them with the existing data.
-5. `startCalibration({ quick: true })` uses one dot per cell once a pooled baseline exists.
+5. `startCalibration({ quick: true })` uses one dot per cell on top of the player's current
+   calibration (or the pooled baseline); with neither it is a full calibration.
+   `createEyeController({ pool: false })` never warm-starts from the pool.
 
 Draw the dots yourself with `startCalibration({ onTarget(target, index, total, info), onProgress(p) })`
 (`info.moving` during the gliding dot, called every frame; `info.hop` during the band hops).

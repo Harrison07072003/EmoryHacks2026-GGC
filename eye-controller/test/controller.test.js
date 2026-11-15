@@ -193,6 +193,36 @@ describe('profiles and the pooled baseline through the contract', () => {
   });
 });
 
+describe('quick calibration and the pool option', () => {
+  const dotsShown = async (eyes, opts) => {
+    let dots = 0;
+    const done = eyes.startCalibration({ ...opts, onTarget: (t, _i, _n, info) => { if (t && info?.phase === 'dots') dots++; } });
+    eyes.mock.step(90000);
+    return { result: await done, dots };
+  };
+  it('quick builds on the player\'s own current calibration (8 dots), even with the pool off', async () => {
+    const eyes = mock({ seed: 41, pool: false });           // the mock is calibrated on init
+    await eyes.init();
+    const { result, dots } = await dotsShown(eyes, { quick: true });
+    expect(dots).toBe(8);
+    expect(result.ok).toBe(true);
+    for (const cell of allCells()) { look(eyes, cellCenter(cell)); expect({ lane: eyes.state.lane, band: eyes.state.band }).toEqual(cell); }
+  });
+  it('quick with nothing to build on is a full calibration', async () => {
+    const eyes = mock({ seed: 42, pool: false, autoCalibrate: false });
+    await eyes.init();
+    expect((await dotsShown(eyes, { quick: true })).dots).toBe(16);
+  });
+  it('pool: false never warm-starts from the pooled baseline', async () => {
+    const storage = memoryStore();
+    for (const seed of [43, 44]) { const e = await ready({ seed, storage }); await e.saveProfile(`p${seed}`); }
+    const off = mock({ seed: 45, storage, pool: false, autoCalibrate: false });
+    await off.init();
+    expect((await off.exportBaseline()).players).toBe(2);   // the pool is still there and still exported
+    expect((await dotsShown(off, { quick: true })).dots).toBe(16);
+  });
+});
+
 describe('online refinement', () => {
   it('pulls a drifted model back gently, without jumps', async () => {
     const eyes = await ready({ seed: 21, noise: 'ideal' });

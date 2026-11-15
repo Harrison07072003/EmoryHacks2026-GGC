@@ -70,6 +70,11 @@ and `src/smoothing/gaze-smoother.js` are first estimates and are expected to mov
   before that they were timed and passed while looking anywhere (and fed wrong samples).
 - v0.5.1: dots are gaze-checked from the 3rd (left/right fit) and 6th (provisional model);
   the checker learns only from dots that passed, so one looked-away dot cannot poison it.
+- Game decisions (2026-11-15, from the user): every session starts with face check + FULL
+  calibration automatically; Redo is always full; quick only between songs / after drift and
+  built on the player's own current calibration; the pool is opt-in (Settings, `pool: false`
+  otherwise); mouse is off by default and emergency mouse is only offered after 2 failed
+  calibrations; drift goes straight to a quick recalibration (3 s notice, cancel = resume).
 - The `rhythmeyez-game` branch was merged into `main` on 2026-11-15. Never write to it; all
   work goes on `main`.
 - Firestore adapter for the pooled baseline and profiles is not built.

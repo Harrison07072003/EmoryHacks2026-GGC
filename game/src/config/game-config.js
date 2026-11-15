@@ -91,7 +91,8 @@ export const CURVE = {
 };
 
 export const INPUT = {
-  gazeLatencyMs: { live: 90, sim: 90, mouse: 0 },   // judge notes against where the eyes were this long ago
+  gazeLatencyMs: { live: 115, sim: 90, mouse: 0 },  // judge notes against where the eyes were this long ago
+                                                     // (live 115: the tracker's measured average lag on a moving target)
   refineOnPerfect: true,  // tell the tracker "the player was certainly looking here" on Perfect hits
 };
 
@@ -117,20 +118,21 @@ export const CALIBRATION = {
   resultAutoMs: 4000,     // a good result screen continues by itself after this long
 };
 
-/** Mouse input next to the eyes. Modes are chosen in Settings. */
+/** Mouse input next to the eyes. The mode is chosen in Settings. */
 export const MOUSE = {
-  defaultMode: 'emergency',  // 'emergency': moving the mouse takes over until the next calibration
-                             // 'assist':    eyes first; the mouse drives only while it moves or the face is lost
-                             // 'off':       the mouse never drives
-  takeoverPx: 60,            // mouse travel within takeoverWindowMs that counts as deliberate use
+  defaultMode: 'off',        // 'off': eyes only; 'assist': eyes first, the mouse drives only while it moves
+                             // or the face is lost
+  assistTravelPx: 60,        // assist: mouse travel within takeoverWindowMs that counts as deliberate use
   takeoverWindowMs: 400,
-  assistHoldMs: 1500,        // assist mode: the mouse keeps control this long after it stops
+  assistHoldMs: 1500,        // assist: the mouse keeps control this long after it stops
+  offerAfterFailures: 2,     // failed calibrations in a row before the game offers to play with the mouse
 };
 
-/** Auto-pause when tracking has drifted during a song (head moved, light changed). */
+/** Tracking drifted during a song (head moved, light changed): pause and recalibrate. */
 export const DRIFT = {
   qualityBelow: 30,       // the engine's live tracking quality (0-100)
   sustainSec: 2.5,        // ...for this long
+  noticeSec: 3,           // "Recalibrating in 3…" (with Cancel) before the quick recalibration starts
 };
 
 /** Face check before calibration. The checks themselves are the engine's positionChecks(). */

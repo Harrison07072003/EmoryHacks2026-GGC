@@ -45,8 +45,10 @@ export default function settings(root, app, { back = 'title' } = {}) {
   stepper('Audio offset', () => s.offsetMs, d => { s.offsetMs += d * 10; }, v => `${v > 0 ? '+' : ''}${v} ms`,
     'If notes feel late compared with the music, lower this; if early, raise it.');
   toggle('Gaze cursor', 'showGazeCursor');
-  choice('Mouse', 'mouseMode', [['emergency', 'EMERGENCY'], ['assist', 'ALLOWED'], ['off', 'OFF']],
-    'Emergency: moving the mouse takes over and turns eye input off until you recalibrate. Allowed: your eyes play, and the mouse steps in only while you move it or your face is lost. Off: eyes only.');
+  choice('Mouse', 'mouseMode', [['off', 'OFF'], ['assist', 'ALLOWED']],
+    'Off: eyes only. Allowed: your eyes play, and the mouse steps in only while you move it or your face is lost. If calibration fails twice in a row, the game offers to switch to the mouse.');
+  toggle('Shared calibration pool', 'usePool',
+    'Off by default. When on, calibrations start from a pool of earlier calibrations (other sessions and players). Helps a brand-new player; can pull an experienced one off. Takes effect next time the game starts.');
   toggle('Help improve eye tracking', 'shareTrackingData',
     'Off by default. When on, each song saves numeric eye measurements (19 numbers per camera frame: eye and head positions, never images or video) with where you were meant to look, so the team can improve the tracker. Stored in this browser, or in the team database if one is configured.');
 
