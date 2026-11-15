@@ -108,21 +108,34 @@ export const PREVIEW = { durationSec: 8, fadeSec: 1.2 };
 
 export const CALIBRATION = {
   minScore: 60,           // below this the engine reports the calibration as not ready
-  betweenSongs: 'quick',  // 'quick' (8 dots + short follow), 'full', or 'off'
+  betweenSongs: 'quick',  // 'quick' (8 dots + short follow + 4 band hops), 'full', or 'off'
   quickPursuitMs: 5000,
   fullPursuitMs: 10000,
+  quickHops: 4,           // top/bottom band hops at the end (the engine checks the player looks at each)
+  fullHops: 8,
   keepWorseBy: 8,         // a between-song recalibration that scores this much lower than the saved one is discarded
+  resultAutoMs: 4000,     // a good result screen continues by itself after this long
 };
 
-/** Face check before calibration (camera view with an oval guide). Box values are 0-1 of the camera frame. */
+/** Mouse input next to the eyes. Modes are chosen in Settings. */
+export const MOUSE = {
+  defaultMode: 'emergency',  // 'emergency': moving the mouse takes over until the next calibration
+                             // 'assist':    eyes first; the mouse drives only while it moves or the face is lost
+                             // 'off':       the mouse never drives
+  takeoverPx: 60,            // mouse travel within takeoverWindowMs that counts as deliberate use
+  takeoverWindowMs: 400,
+  assistHoldMs: 1500,        // assist mode: the mouse keeps control this long after it stops
+};
+
+/** Auto-pause when tracking has drifted during a song (head moved, light changed). */
+export const DRIFT = {
+  qualityBelow: 30,       // the engine's live tracking quality (0-100)
+  sustainSec: 2.5,        // ...for this long
+};
+
+/** Face check before calibration. The checks themselves are the engine's positionChecks(). */
 export const FACE_CHECK = {
   holdSec: 1.5,           // all required checks green this long -> continue by itself
-  maxOffsetX: 0.15,       // face centre may be this far from the middle, left/right
-  maxOffsetY: 0.2,        // and up/down
-  minWidth: 0.2,          // face narrower than this = too far away
-  maxWidth: 0.5,          // wider than this = too close
-  minLight: 50,           // mean brightness of the face, 0-255 (before the engine's auto-exposure)
-  maxGlare: 0.03,         // share of blown-out pixels in an eye (glasses reflections); a warning only
 };
 
 /** Pausing during a song. */

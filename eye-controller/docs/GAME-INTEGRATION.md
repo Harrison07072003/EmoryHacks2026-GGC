@@ -1,4 +1,13 @@
-# Eye-controller v0.4: what is new for the game
+# Eye-controller and the game
+
+> **Status 2026-11-15:** the game is merged into `main` and already uses everything below:
+> the engine's face view and checks in its face-check screen, the engine's calibration and
+> result screens via `game/src/input/calibration-flow.js` (theme `'neon'`, `keys: false`,
+> buttons pressed by the game's dwell), `cancelCalibration()`, shorter quick calibrations
+> (`hops: 4`), drift auto-pause with in-song quick recalibration, and the mouse modes.
+> The notes below explain the engine side.
+
+## Eye-controller v0.4+: what is new for the game
 
 Written for the game team after reading the game branch (`game/src/screens/face-check.js`,
 `calibration.js`, `input/gaze-input.js`, `config/game-config.js`) on 2026-11-15. Everything
@@ -106,6 +115,11 @@ Differences, all from measured clips:
 ## 4. Ready-made screens (optional)
 
 If you would rather not maintain your own:
+
+All of them take `theme` (`'default'`, `'neon'` or a partial object: font, display, bg,
+panel, text, ok, accent, warn, bad, secondary) for reskins, `keys: false` to leave keys to
+the page, and `buttonClass` for the page's own button style. Their buttons carry
+`data-gaze`, so the game's dwell presses them with the eyes.
 
 - `runFaceCheck(eyes)` → full-screen face check, continues by itself after 1.5 s all-green.
 - `startCalibration()` without `onTarget` → the built-in calibration screen: lane grid,

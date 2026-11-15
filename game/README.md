@@ -21,7 +21,9 @@ Open **http://localhost:5190** (the camera needs localhost or https) and allow t
 
 **Always use the same address.** The game runs on a fixed port (5190) because the browser
 keeps calibration, settings and results per address. Opened on another port or through a
-different forwarding URL, it looks like a brand-new player.
+different forwarding URL, it looks like a brand-new player. The eye-controller's debug /
+recording page (`npm --prefix eye-controller run dev`) uses the same port, so the pooled
+baseline it builds is the one the game sees: **run one of the two at a time.**
 
 **Coming back later:** the saved calibration loads automatically, so the gaze works on the
 title screen straight away. Pressing Start offers a quick 15-second recalibration, with
@@ -55,12 +57,25 @@ pause or goes back.
 
 ## How to play
 
-- **Face check (before every calibration):** you see yourself in a mirrored camera view with an
-  oval. Move until every line is green (face found, centered, distance, lighting; glasses glare
-  is only a warning). After 1.5 s of all-green it continues by itself.
-- **Pause:** the Pause button (top right) freezes the song: Resume / Songs / Home. Quit asks
-  before leaving. The song also pauses by itself if your face is out of view for 3 s. Resume
-  rewinds 1 s and counts in.
+- **Face check (before every calibration):** the eye-controller's face view: your mirrored
+  camera image with an oval, the face mesh, both eye close-ups and a live **CONDITIONS %**.
+  Move until every line is green (face found, centred, distance, lighting; brightness, glare
+  and facing the screen are warnings). After 1.5 s of all-green it continues by itself.
+- **Calibration** is the eye-controller's own screen in the game's look: look at each dot
+  until it locks (from the 3rd dot it checks you are really looking at it), follow the moving
+  dot, then look at the dots hopping between the top and bottom band. A small camera view
+  sits in the corner during calibration only. The result screen shows your score and each
+  screen area; Continue / Top-up weak / Redo are pressed by looking at them (a good result
+  continues by itself).
+- **Pause:** the Pause button (top right) freezes the song: Resume / Quick recalibrate /
+  Songs / Home. Quit asks before leaving. The song also pauses by itself if your face is out
+  of view for 3 s, or if tracking drifts (live quality below 30 for 2.5 s: you moved, the light
+  changed); then **Quick recalibrate** is offered first, runs on top of the song (about 20 s)
+  and the song carries on. Resume rewinds 1 s and counts in.
+- **Mouse (Settings → Mouse):** *Emergency* (default): deliberately moving the mouse takes
+  over and turns eye input off until you recalibrate; the badge bottom-left says so.
+  *Allowed*: your eyes play, and the mouse steps in only while you move it or your face is
+  lost. *Off*: eyes only. (On `?input=sim` the mouse is how you look, so no takeover.)
 - **Menus:** look at a button. A pie fills clockwise; after **2 seconds** it presses.
   Look away and it drains back down.
 - **Straight notes** slide down the perspective highway to the **upper glowing line**. Look at

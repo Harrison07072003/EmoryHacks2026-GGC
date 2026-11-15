@@ -8,8 +8,14 @@
 //         the real smoothing / lane pipeline (realistic noise and lag)
 //   mouse DEVELOPMENT ONLY: the mouse pointer is the gaze, no tracking pipeline at all
 // Shift+M toggles a mouse override at runtime for testing; it is always labelled on screen.
+//
+// Mouse next to the eyes (settings.mouseMode, see MOUSE in game-config.js):
+//   emergency  deliberate mouse movement takes over and turns eye input off until the next
+//              successful calibration (for when tracking is unusable mid-game)
+//   assist     eyes first; the mouse drives only while it is moving or the face is lost
+//   off        the mouse never drives (except the dev sources above)
 import { createEyeController, createMockEyeController } from '../../../eye-controller/src/index.js';
-import { CALIBRATION, LAYOUT } from '../config/game-config.js';
+import { CALIBRATION, LAYOUT, MOUSE } from '../config/game-config.js';
 
 export const SOURCES = {
   live: { label: 'LIVE EYE TRACKING', dev: false },
@@ -17,31 +23,68 @@ export const SOURCES = {
   mouse: { label: 'DEV: MOUSE AS GAZE', dev: true },
 };
 
-export function createGazeInput(source = 'live') {
+/**
+ * @param options  mouseMode: () => 'emergency' | 'assist' | 'off' (read live, so Settings apply at once)
+ *                 onMouseTakeover: called when emergency mode hands control to the mouse
+ */
+export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defaultMode, onMouseTakeover = () => {} } = {}) {
   const layout = { lanes: LAYOUT.lanes, bandSplit: LAYOUT.bandSplit };
   const eyes = source === 'live' ? createEyeController({ layout, minScore: CALIBRATION.minScore })
     : source === 'sim' ? createMockEyeController({ layout, minScore: CALIBRATION.minScore, autoCalibrate: false })
       : null;
   const gaze = { x: 0.5, y: 0.5, valid: false };
-  const mouse = { x: 0.5, y: 0.5, seen: false };
-  let override = source === 'mouse';
-  const listeners = new Set();
+  const mouse = { x: 0.5, y: 0.5, seen: false, activeAt: -Infinity, travel: [] };
+  let override = source === 'mouse';   // dev: Shift+M or ?input=mouse
+  let mouseLock = false;               // emergency takeover, until the next calibration
+  let watching = true, driver = override ? 'mouse' : 'eyes';
+  const listeners = new Set(), notify = () => listeners.forEach(f => f());
   let lastFrame = null;
   eyes?.onSample(sample => { lastFrame = sample.frame; });
 
-  addEventListener('pointermove', e => { mouse.x = e.clientX / innerWidth; mouse.y = e.clientY / innerHeight; mouse.seen = true; });
-  addEventListener('keydown', e => {
-    if (e.key === 'M' && e.shiftKey && source !== 'mouse') { override = !override; listeners.forEach(f => f()); }
+  addEventListener('pointermove', e => {
+    const x = e.clientX / innerWidth, y = e.clientY / innerHeight, now = performance.now();
+    if (mouse.seen) {
+      // add up recent travel: a nudge of the desk is not deliberate use, a real move is
+      mouse.travel.push({ t: now, d: Math.hypot(e.clientX - mouse.x * innerWidth, e.clientY - mouse.y * innerHeight) });
+      while (mouse.travel.length && now - mouse.travel[0].t > MOUSE.takeoverWindowMs) mouse.travel.shift();
+    }
+    Object.assign(mouse, { x, y, seen: true });
+    // live webcam only: on simulated eyes (?input=sim) the mouse is how you look
+    if (!watching || source !== 'live' || override || e.pointerType === 'touch') return;
+    if (mouse.travel.reduce((a, s) => a + s.d, 0) < MOUSE.takeoverPx) return;
+    mouse.activeAt = now;
+    if (mouseMode() === 'emergency' && !mouseLock) { mouseLock = true; notify(); onMouseTakeover(); }
   });
+  addEventListener('keydown', e => {
+    if (e.key === 'M' && e.shiftKey && source !== 'mouse') { override = !override; notify(); }
+  });
+
+  const eyesUsable = () => !!eyes && eyes.state.faceVisible && eyes.state.calibrationScore !== null;
+  /** Who drives the gaze right now: 'eyes' or 'mouse'. */
+  function pickDriver(now) {
+    if (override || mouseLock || !eyes) return 'mouse';
+    if (mouseMode() === 'assist' && mouse.seen && (now - mouse.activeAt < MOUSE.assistHoldMs || !eyesUsable())) return 'mouse';
+    return 'eyes';
+  }
 
   const api = {
     source, eyes, gaze, layout,
-    get sourceInfo() { return override && source !== 'mouse' ? { label: 'DEV: MOUSE OVERRIDE (Shift+M)', dev: true } : SOURCES[source]; },
-    get latencyKey() { return override ? 'mouse' : source; },
-    get mouseOverride() { return override; },
+    get sourceInfo() {
+      if (override && source !== 'mouse') return { label: 'DEV: MOUSE OVERRIDE (Shift+M)', dev: true };
+      if (mouseLock) return { label: 'MOUSE: eye input off until you recalibrate', dev: false, warn: true };
+      if (driver === 'mouse' && source !== 'mouse') return { label: 'MOUSE ASSIST', dev: false, warn: true };
+      return SOURCES[source];
+    },
+    get latencyKey() { return driver === 'mouse' ? 'mouse' : source; },
+    /** The mouse is driving right now (dev override, emergency takeover, or assist). */
+    get mouseOverride() { return driver === 'mouse'; },
+    /** Dev override only (Shift+M / ?input=mouse): nothing to calibrate. */
+    get manualMouse() { return override; },
+    /** Emergency takeover is on: eye input stays off until a calibration succeeds. */
+    get mouseLocked() { return mouseLock; },
     onSourceChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-    /** @param videoEl  the page's camera <video> (live only): the face check shows it */
+    /** @param videoEl  the page's camera <video> (live only) */
     async init(videoEl) { if (eyes) await eyes.init(source === 'live' ? videoEl : undefined); },
     /** Latest eye-controller frame (face box, eye glare / brightness, exposure), or null. */
     get frame() { return lastFrame; },
@@ -49,26 +92,34 @@ export function createGazeInput(source = 'live') {
     get hasCamera() { return source === 'live'; },
 
     /** A calibration exists this page load (score may still be below the play threshold). */
-    get calibrated() { return override || !eyes ? true : eyes.state.calibrationScore !== null; },
+    get calibrated() { return driver === 'mouse' ? true : eyes.state.calibrationScore !== null; },
     get calibrationScore() { return eyes?.state.calibrationScore ?? null; },
-    get calibrationOk() { return override || !eyes ? true : eyes.state.ready; },
-    get faceVisible() { return override || !eyes ? true : eyes.state.faceVisible; },
-    get quality() { return override || !eyes ? 100 : eyes.state.quality; },
+    get calibrationOk() { return driver === 'mouse' ? true : eyes.state.ready; },
+    get faceVisible() { return driver === 'mouse' ? true : eyes.state.faceVisible; },
+    get quality() { return driver === 'mouse' ? 100 : eyes.state.quality; },
 
     /** Call once per animation frame before reading `gaze`. */
     update() {
-      if (override || !eyes) { gaze.x = mouse.x; gaze.y = mouse.y; gaze.valid = mouse.seen; return gaze; }
+      const next = pickDriver(performance.now());
+      if (next !== driver) { driver = next; notify(); }
+      if (driver === 'mouse') { gaze.x = mouse.x; gaze.y = mouse.y; gaze.valid = mouse.seen; return gaze; }
       const s = eyes.state;
       gaze.x = s.gaze.x; gaze.y = s.gaze.y;
       gaze.valid = s.faceVisible && s.calibrationScore !== null;
       return gaze;
     },
 
+    /** Pause / resume the mouse watch (calibration turns it off: moving the mouse there is fine). */
+    watchMouse(on) { watching = on; mouse.travel = []; },
+    /** A successful calibration hands control back to the eyes. */
+    clearMouseLock() { if (mouseLock) { mouseLock = false; mouse.activeAt = -Infinity; notify(); } },
+
     async loadProfile() { return eyes ? eyes.loadProfile() : false; },
     async saveProfile() { return eyes ? eyes.saveProfile() : false; },
     /** Telemetry label: where the player should be looking right now (null to clear). */
     setTarget(point, id) { eyes?.setTarget(point, id); },
-    confirmOnTarget(point) { if (eyes && !override) eyes.confirmOnTarget(point); },
+    /** Teach the tracker from a hit, only when the eyes produced it. */
+    confirmOnTarget(point) { if (eyes && driver === 'eyes') eyes.confirmOnTarget(point); },
   };
   return api;
 }

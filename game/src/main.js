@@ -30,7 +30,10 @@ const settings = loadSettings();
 const audio = createAudioEngine(settings);
 const sfx = createSfx(audio);
 const music = createMusic(audio);
-const gaze = createGazeInput(sourceName);
+const gaze = createGazeInput(sourceName, {
+  mouseMode: () => settings.mouseMode,
+  onMouseTakeover: () => toast('Mouse took over: eye input is off until you recalibrate (Settings → Mouse to change this)', 4500),
+});
 const dwell = createDwell({ ring: document.getElementById('dwell-ring'), sfx });
 const remoteCfg = supabaseConfig();
 const store = createGameStore(safeIndexedDb(), remoteCfg ? createSupabaseClient(remoteCfg) : null);
@@ -72,6 +75,7 @@ function showSource() {
   const badge = document.getElementById('input-badge'), info = gaze.sourceInfo;
   badge.textContent = info.label;
   badge.classList.toggle('dev', info.dev);
+  badge.classList.toggle('warn', !!info.warn);
 }
 
 // ---- testing keys (never required to play) ----

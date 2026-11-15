@@ -72,6 +72,8 @@ export function buildController(source, options = {}) {
      *          hops    - number of top/bottom band hops at the end (default 8, 1.2 s each, 0 = none)
      *          targets - your own [{x, y}] list
      *          area    - element the dots are drawn over (default: the whole page)
+     *          theme   - built-in screen look: 'default', 'neon' or a partial theme object
+     *          keys    - false when the page handles Escape itself (then use cancelCalibration)
      *          onTarget(target | null, index, total, info), onProgress(0-1, { stage, steadiness }) - draw the dots yourself;
      *                    stage is 'seeking' / 'capturing' / 'locked' during the dots (see calibration/session.js);
      *                    info.phase is 'dots', 'pursuit' (info.moving, called every frame) or
@@ -90,7 +92,7 @@ export function buildController(source, options = {}) {
       const hops = playLike ? hopTargets(opts.hops ?? DEFAULT_HOPS, layout) : [];
       const ui = opts.onTarget
         ? { show: opts.onTarget, progress: opts.onProgress ?? (() => {}), destroy() {} }
-        : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort(), { eyes: api, layout }) : { show() {}, progress() {}, destroy() {} };
+        : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort(), { eyes: api, layout, theme: opts.theme, keys: opts.keys }) : { show() {}, progress() {}, destroy() {} };
 
       return new Promise(resolve => {
         session = engine.session = new CalibrationSession({

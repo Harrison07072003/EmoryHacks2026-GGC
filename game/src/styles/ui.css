@@ -53,6 +53,7 @@
 
 #input-badge { position: fixed; left: 14px; bottom: 12px; z-index: 96; font: 700 12px var(--font-display); letter-spacing: 0.12em; color: var(--text-dim); pointer-events: none; }
 #input-badge.dev { color: #111; background: var(--gold); padding: 6px 10px; border-radius: 8px; }
+#input-badge.warn { color: #111; background: var(--perfect); padding: 6px 10px; border-radius: 8px; }
 #toast { position: fixed; left: 50%; top: 18px; transform: translate(-50%, -140%); z-index: 99; padding: 12px 22px; border-radius: 12px; background: rgba(10, 12, 20, 0.92); border: 1px solid var(--panel-edge); transition: transform 0.3s; max-width: 80vw; text-align: center; }
 #toast.show { transform: translate(-50%, 0); }
 

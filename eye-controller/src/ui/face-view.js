@@ -6,8 +6,11 @@
 //   const view = createFaceView(eyes, canvasElement, { checks: true });
 //   ...  view.destroy();
 import { positionChecks, positionOk } from '../signals/position.js';
+import { alpha, resolveTheme } from './theme.js';
 
-const C = { ok: '#39ffb0', info: '#4de1ff', warn: '#ffd34d', bad: '#ff4d6d', dim: 'rgba(255,255,255,0.18)', text: '#e8ecff' };
+// drawing palette; set from the view's theme at the start of every draw (draws never overlap)
+let C = paletteOf(resolveTheme());
+function paletteOf(T) { return { ok: T.ok, info: T.accent, warn: T.warn, bad: T.bad, dim: T.dim, text: T.text, bg: T.bg, font: T.font }; }
 
 /**
  * @param eyes     an eye-controller (live or mock)
@@ -21,13 +24,15 @@ const C = { ok: '#39ffb0', info: '#4de1ff', warn: '#ffd34d', bad: '#ff4d6d', dim
  *                 lanes   mini lane map (default true)    auto    redraw every frame by itself (default true)
  *                 oval    oval guide (default true)       labels  text on the image (default true); turn both
  *                         off for a small thumbnail
+ *                 theme   'default', 'neon' (the game's look) or a partial theme object (see theme.js)
  */
 export function createFaceView(eyes, canvas, options = {}) {
   const opt = { video: true, image: 'raw', mesh: 'contours', eyes: true, checks: false, lanes: true, auto: true, oval: true, labels: true, ...options };
-  const g = canvas.getContext('2d');
+  const g = canvas.getContext('2d'), palette = paletteOf(resolveTheme(opt.theme));
   let raf = 0, dead = false;
 
   function draw(now = performance.now()) {
+    C = palette;
     // resize only when the CSS size changed (re-allocating the canvas every frame is costly)
     const W = Math.max(1, Math.round(canvas.clientWidth * devicePixelRatio)), H = Math.max(1, Math.round(canvas.clientHeight * devicePixelRatio));
     if (canvas.width !== W) canvas.width = W;
@@ -42,7 +47,7 @@ export function createFaceView(eyes, canvas, options = {}) {
     const P = (x, y) => [fit.x + (1 - (x - roi.x) / roi.w) * fit.w, fit.y + ((y - roi.y) / roi.h) * fit.h];
 
     g.clearRect(0, 0, W, H);
-    g.fillStyle = '#07070d'; g.fillRect(fit.x, fit.y, fit.w, fit.h);
+    g.fillStyle = C.bg; g.fillRect(fit.x, fit.y, fit.w, fit.h);
     if (opt.video && (processed || data.video?.videoWidth)) {
       g.save(); g.translate(fit.x + fit.w, fit.y); g.scale(-1, 1);
       g.globalAlpha = 0.85; g.drawImage(src, 0, 0, fit.w, fit.h); g.restore();
@@ -88,9 +93,9 @@ function line(g, L, P, pairs) {
 // Restrained on purpose: thin lines, one accent colour, the lips barely there. The eyes and
 // irises are what the tracker uses, so they stay the clearest.
 function drawMesh(g, { landmarks: L, mesh }, P, s, mode) {
-  if (mode === 'full') { g.strokeStyle = 'rgba(77,225,255,0.07)'; g.lineWidth = 0.75 * s; line(g, L, P, mesh.tesselation); }
+  if (mode === 'full') { g.strokeStyle = alpha(C.info, 0.07); g.lineWidth = 0.75 * s; line(g, L, P, mesh.tesselation); }
   g.lineWidth = 1 * s;
-  g.strokeStyle = 'rgba(77,225,255,0.4)'; line(g, L, P, mesh.oval);
+  g.strokeStyle = alpha(C.info, 0.4); line(g, L, P, mesh.oval);
   g.strokeStyle = 'rgba(232,236,255,0.22)'; line(g, L, P, mesh.brows);
   g.strokeStyle = 'rgba(232,236,255,0.1)'; line(g, L, P, mesh.lips);
   g.strokeStyle = 'rgba(232,236,255,0.65)'; line(g, L, P, mesh.eyes);
@@ -100,7 +105,7 @@ function drawMesh(g, { landmarks: L, mesh }, P, s, mode) {
 /** No landmarks (mock): an outline from the face box, eyes where they usually are. */
 function stylisedFace(g, fr, P, s) {
   const b = fr.box, [x0, y0] = P(b.x + b.w, b.y), [x1, y1] = P(b.x, b.y + b.h), w = x1 - x0, h = y1 - y0;
-  g.strokeStyle = 'rgba(77,225,255,0.4)'; g.lineWidth = 1 * s;
+  g.strokeStyle = alpha(C.info, 0.4); g.lineWidth = 1 * s;
   g.beginPath(); g.ellipse(x0 + w / 2, y0 + h / 2, w * 0.42, h * 0.48, 0, 0, 7); g.stroke();
   g.strokeStyle = 'rgba(232,236,255,0.65)';
   for (const ex of [0.32, 0.68]) { g.beginPath(); g.ellipse(x0 + w * ex, y0 + h * 0.42, w * 0.1, h * 0.04, 0, 0, 7); g.stroke(); }
@@ -183,7 +188,7 @@ function drawLaneMap(g, eyes, fit, s) {
 
 function drawChecks(g, checks, fit, s) {
   const lines = checks.map(c => ({ c, t: `${c.pass ? '✓' : c.warnOnly ? '!' : '✗'} ${c.label}${c.pass ? '' : ` – ${c.hint}`}` }));
-  g.font = `600 ${12 * s}px system-ui, sans-serif`;
+  g.font = `600 ${12 * s}px ${C.font}`;
   const w = Math.min(fit.w * 0.6, Math.max(...lines.map(l => g.measureText(l.t).width)) + 16 * s), lh = 20 * s;
   const x = fit.x + fit.w - w - 10 * s, y0 = fit.y + fit.h - lines.length * lh - 4 * s;
   g.fillStyle = 'rgba(7,7,13,0.75)'; g.fillRect(x, y0 - 16 * s, w, lines.length * lh + 10 * s);
@@ -191,6 +196,6 @@ function drawChecks(g, checks, fit, s) {
 }
 
 function label(g, text, x, y, size, color, align = 'left') {
-  g.font = `600 ${size}px system-ui, sans-serif`; g.textAlign = align; g.fillStyle = color;
+  g.font = `600 ${size}px ${C.font}`; g.textAlign = align; g.fillStyle = color;
   g.shadowColor = 'rgba(0,0,0,0.8)'; g.shadowBlur = 4; g.fillText(text, x, y); g.shadowBlur = 0;
 }

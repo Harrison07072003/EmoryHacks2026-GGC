@@ -1,9 +1,12 @@
 // The play screen: song clock, judging, scoring, effects, character, pause/quit.
+// When tracking drifts (live quality stays low) or the face is gone, the song pauses itself;
+// the pause menu offers a quick recalibration that runs on top of the song and resumes it.
 //
 // Song time comes from the AudioContext clock (the same clock that plays the music), minus
 // the output latency and the player's offset setting, so notes line up with what is heard.
 // If the browser is still blocking audio, the song plays silently on performance.now().
-import { COUNTDOWN_SEC, INPUT, LEAD_IN_SEC, MODES, PAUSE } from '../config/game-config.js';
+import { COUNTDOWN_SEC, DRIFT, INPUT, LEAD_IN_SEC, MODES, PAUSE } from '../config/game-config.js';
+import { runEngineCalibration } from '../input/calibration-flow.js';
 import { CHARACTERS } from '../characters/characters.js';
 import { mountPortrait, startBlinking } from '../characters/portrait.js';
 import { songById, loadChart } from '../songs/index.js';
@@ -47,7 +50,7 @@ export default function play(root, app) {
   el.appendChild(gazeButton('Quit', () => confirmQuit(), { cls: 'danger small quit-btn', sound: 'back' }));
 
   let state = 'loading', chart, judge, scoring, highway, buffer = null, stats, telemetry = null;
-  let clock = null, faceLostSince = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
+  let clock = null, faceLostSince = null, driftSince = null, resumeAt = null, lastT = -LEAD_IN_SEC, countdownUntil = 0, lastCount = null;
   const noteState = new Map(), curveDone = new Set();
   const latency = () => (INPUT.gazeLatencyMs[gaze.latencyKey] ?? 0) / 1000;
 
@@ -113,17 +116,34 @@ export default function play(root, app) {
   }
   const resume = () => countdown(resumeAt === null ? COUNTDOWN_SEC : PAUSE.resumeCountdownSec);
 
-  function pause(reason = '') {
+  const canRecalibrate = () => !!gaze.eyes && !gaze.manualMouse;
+
+  /** @param recalibrateFirst  put Quick recalibrate first (tracking drifted) */
+  function pause(reason = '', { recalibrateFirst = false } = {}) {
     if (!halt()) return;
+    const recal = canRecalibrate() ? [{ label: 'Quick recalibrate', cls: recalibrateFirst ? '' : 'purple', onPress: recalibrateAndResume }] : [];
     popup({
       title: 'Paused',
       text: reason || `${esc(song.title)} · ${esc(mode.label)}`,
       buttons: [
-        { label: 'Resume', onPress: resume },
+        ...(recalibrateFirst ? recal : []),
+        { label: 'Resume', cls: recalibrateFirst ? 'purple' : '', onPress: resume },
+        ...(recalibrateFirst ? [] : recal),
         { label: 'Songs', cls: 'purple', sound: 'back', onPress: () => app.go('songs') },
         { label: 'Home', cls: 'danger', sound: 'back', onPress: () => app.go('title') },
       ],
     });
+  }
+
+  /** The engine's quick calibration on top of the paused song, then a short countdown back in. */
+  async function recalibrateAndResume() {
+    state = 'recalibrating';
+    const r = await runEngineCalibration(app, { quick: true });
+    if (state === 'gone') return;
+    state = 'paused';
+    if (r.aborted) return pause('Recalibration cancelled.');
+    driftSince = null; faceLostSince = null;
+    resume();
   }
 
   function confirmQuit() {
@@ -192,12 +212,18 @@ export default function play(root, app) {
         if (left !== lastCount && left > 0) { lastCount = left; $('.countdown').innerHTML = `<b>${left}</b>`; sfx.play('count'); }
         if (now >= countdownUntil) begin();
       }
-      // auto-pause when the player's face has been gone for a while (live tracking only)
-      const tracking = gaze.eyes && !gaze.mouseOverride && PAUSE.autoPauseOnFaceLostSec > 0;
-      faceLostSince = state === 'playing' && tracking && !gaze.faceVisible ? (faceLostSince ?? now) : null;
+      // auto-pause when the player's face has been gone for a while (eye tracking only)
+      const tracking = gaze.eyes && !gaze.mouseOverride;
+      faceLostSince = state === 'playing' && tracking && PAUSE.autoPauseOnFaceLostSec > 0 && !gaze.faceVisible ? (faceLostSince ?? now) : null;
       if (faceLostSince !== null && now - faceLostSince > PAUSE.autoPauseOnFaceLostSec * 1000) {
         faceLostSince = null;
         pause('Your face left the camera view. Sit back in front of the camera, then look at Resume.');
+      }
+      // auto-pause when tracking has drifted (head moved, light changed): offer a quick recalibration
+      driftSince = state === 'playing' && tracking && gaze.faceVisible && gaze.quality < DRIFT.qualityBelow ? (driftSince ?? now) : null;
+      if (driftSince !== null && now - driftSince > DRIFT.sustainSec * 1000) {
+        driftSince = null;
+        pause('Tracking has drifted (you may have moved, or the light changed). A quick recalibration takes about 20 seconds, then the song carries on.', { recalibrateFirst: true });
       }
       if (state === 'playing') {
         const jt = t - latency();
@@ -226,10 +252,10 @@ export default function play(root, app) {
 
       highway.draw({ now: t, notes: chart.notes, noteState, curveOnPath: judge.curveOnPath(), curveDone, gaze: gaze.gaze, activeLanes: judge.activeLanes(), frenzy: s.frenzyActive });
     },
-    onEscape: () => pause(),
+    onEscape: () => { if (state === 'recalibrating') gaze.eyes?.cancelCalibration(); else pause(); },
     onKey: key => { if (key === 'p') pause(); },
     unmount() {
-      if (state === 'playing' || state === 'countdown' || state === 'paused') telemetry?.stop();
+      if (['playing', 'countdown', 'paused', 'recalibrating'].includes(state)) telemetry?.stop();
       state = 'gone';
       music.stop(0.2);
       gaze.setTarget(null);

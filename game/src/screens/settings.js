@@ -1,4 +1,4 @@
-// Settings: volumes, audio offset, gaze cursor, and the opt-in tracking-data switch.
+// Settings: volumes, audio offset, gaze cursor, mouse mode, and the opt-in tracking-data switch.
 // Every control is a gaze button (2 s dwell), so no hands are needed.
 import { gazeButton, html } from './ui.js';
 
@@ -31,12 +31,22 @@ export default function settings(root, app, { back = 'title' } = {}) {
     if (note) grid.append(html(`<div class="note">${note}</div>`));
   }
 
+  function choice(label, key, options, note) {
+    const name = () => options.find(([v]) => v === s[key])?.[1] ?? options[0][1];
+    const value = html(`<div class="value">${name()}</div>`);
+    const next = () => { const i = options.findIndex(([v]) => v === s[key]); s[key] = options[(i + 1) % options.length][0]; app.saveSettings(); value.textContent = name(); };
+    grid.append(html(`<div class="label">${label}</div>`), html('<div></div>'), value, gazeButton('Switch', next, { cls: 'small purple' }));
+    if (note) grid.append(html(`<div class="note">${note}</div>`));
+  }
+
   stepper('Master volume', () => s.master, d => { s.master = clamp01(s.master + d * 0.1); }, pct);
   stepper('Music volume', () => s.music, d => { s.music = clamp01(s.music + d * 0.1); }, pct);
   stepper('Effects volume', () => s.sfx, d => { s.sfx = clamp01(s.sfx + d * 0.1); }, pct);
   stepper('Audio offset', () => s.offsetMs, d => { s.offsetMs += d * 10; }, v => `${v > 0 ? '+' : ''}${v} ms`,
     'If notes feel late compared with the music, lower this; if early, raise it.');
   toggle('Gaze cursor', 'showGazeCursor');
+  choice('Mouse', 'mouseMode', [['emergency', 'EMERGENCY'], ['assist', 'ALLOWED'], ['off', 'OFF']],
+    'Emergency: moving the mouse takes over and turns eye input off until you recalibrate. Allowed: your eyes play, and the mouse steps in only while you move it or your face is lost. Off: eyes only.');
   toggle('Help improve eye tracking', 'shareTrackingData',
     'Off by default. When on, each song saves numeric eye measurements (19 numbers per camera frame: eye and head positions, never images or video) with where you were meant to look, so the team can improve the tracker. Stored in this browser, or in the team database if one is configured.');
 

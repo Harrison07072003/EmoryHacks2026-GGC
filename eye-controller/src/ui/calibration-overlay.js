@@ -8,37 +8,42 @@
 // band hops, the band the tracker thinks you look at lights up (green = right band). Escape cancels.
 import { createFaceView } from './face-view.js';
 import { DEFAULT_LAYOUT } from '../signals/lanes.js';
+import { alpha, resolveTheme } from './theme.js';
 
 const PHASES = [['dots', 'Hold your gaze'], ['pursuit', 'Follow the dot'], ['hops', 'Jump between bands']];
-const COLORS = { dot: '#ffffff', core: '#ff4d6d', ring: '#ffd34d', glow: '77,225,255', ok: '#39ffb0' };
+// set from the overlay's theme at the start of every frame (frames never overlap)
+let T = resolveTheme();
 
 /**
  * @param area      element to cover (default: the whole page)
  * @param onCancel  called on Escape
- * @param options   eyes (shows a live mini face view), layout
+ * @param options   eyes (shows a live mini face view), layout, theme ('default' | 'neon' | object),
+ *                  keys: false when the page handles Escape itself (e.g. the game)
  */
-export function createCalibrationOverlay(area = document.body, onCancel = () => {}, { eyes = null, layout = DEFAULT_LAYOUT } = {}) {
+export function createCalibrationOverlay(area = document.body, onCancel = () => {}, { eyes = null, layout = DEFAULT_LAYOUT, theme, keys = true } = {}) {
+  const theme_ = resolveTheme(theme);
   const root = document.createElement('div');
-  root.style.cssText = `position:${area === document.body ? 'fixed' : 'absolute'};inset:0;z-index:9999;background:#07070d;cursor:none`;
+  root.style.cssText = `position:${area === document.body ? 'fixed' : 'absolute'};inset:0;z-index:9999;background:${theme_.bg};cursor:none`;
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   root.append(canvas);
   let face = null, mini = null;
   if (eyes) {
     mini = document.createElement('canvas');
-    mini.style.cssText = 'position:absolute;inset:auto 16px 16px auto;width:240px;height:135px;border-radius:10px;border:1px solid rgba(77,225,255,.35);transition:opacity .25s';
+    mini.style.cssText = `position:absolute;inset:auto 16px 16px auto;width:240px;height:135px;border-radius:10px;border:1px solid ${alpha(theme_.accent, 0.35)};transition:opacity .25s`;
     root.append(mini);
-    face = createFaceView(eyes, mini, { eyes: false, lanes: false, oval: false, labels: false });
+    face = createFaceView(eyes, mini, { eyes: false, lanes: false, oval: false, labels: false, theme: theme_ });
   }
   area.append(root);
   const g = canvas.getContext('2d');
 
   const st = { target: null, shown: { x: 0.5, y: 0.5 }, index: 0, total: 1, phase: 'dots', progress: 0, ring: 0, stage: 'seeking', steady: 0, steadyShown: 0, stageSince: 0, trail: [], bursts: [], flashes: [], phaseDone: {} };
   const onKey = e => { if (e.key === 'Escape') onCancel(); };
-  addEventListener('keydown', onKey);
+  if (keys) addEventListener('keydown', onKey);
   let raf = requestAnimationFrame(function loop(now) { render(now); raf = requestAnimationFrame(loop); });
 
   function render(now) {
+    T = theme_;
     const s = devicePixelRatio, W = (canvas.width = root.clientWidth * s), H = (canvas.height = root.clientHeight * s);
     g.clearRect(0, 0, W, H);
     drawGrid(g, W, H, layout, st, now);
@@ -50,14 +55,14 @@ export function createCalibrationOverlay(area = document.body, onCancel = () => 
     const x = st.shown.x * W, y = st.shown.y * H;
     if (st.phase === 'pursuit' && st.target) {
       st.trail.push({ x, y }); if (st.trail.length > 28) st.trail.shift();
-      st.trail.forEach((p, i) => { g.fillStyle = `rgba(${COLORS.glow},${(i / st.trail.length) * 0.45})`; g.beginPath(); g.arc(p.x, p.y, (6 + i * 0.5) * s, 0, 7); g.fill(); });
+      st.trail.forEach((p, i) => { g.fillStyle = alpha(T.accent, (i / st.trail.length) * 0.45); g.beginPath(); g.arc(p.x, p.y, (6 + i * 0.5) * s, 0, 7); g.fill(); });
     } else st.trail.length = 0;
     if (st.phase === 'hops' && st.gaze && st.stage === 'capturing') drawGazeBand(g, W, H, layout, st);
     if (st.target) drawDot(g, x, y, s, st, now);
     if (mini) fadeMiniNear(mini, root, [st.target && { x: st.target.x * root.clientWidth, y: st.target.y * root.clientHeight }, ...st.trail.map(p => ({ x: p.x / s, y: p.y / s }))]);
     drawBursts(g, st, now, s);
     drawHeader(g, W, s, st);
-    if (eyes && !eyes.faceData().frame?.face) text(g, 'Face lost – look at the screen', W / 2, H - 40 * s, 22 * s, '#ff4d6d');
+    if (eyes && !eyes.faceData().frame?.face) text(g, 'Face lost – look at the screen', W / 2, H - 40 * s, 22 * s, T.bad);
   }
 
   return {
@@ -98,7 +103,7 @@ function fadeMiniNear(mini, root, points, margin = 70) {
  */
 function drawGazeBand(g, W, H, { bandSplit }, st) {
   const top = st.gaze.y < bandSplit, right = (st.target.y < bandSplit) === top;
-  g.fillStyle = right ? 'rgba(57,255,176,0.08)' : 'rgba(255,211,77,0.08)';
+  g.fillStyle = right ? alpha(T.ok, 0.08) : alpha(T.warn, 0.08);
   g.fillRect(0, top ? 0 : bandSplit * H, W, (top ? bandSplit : 1 - bandSplit) * H);
 }
 
@@ -109,7 +114,7 @@ function drawGrid(g, W, H, { lanes, bandSplit }, st, now) {
   st.flashes = st.flashes.filter(f => now - f.t < 500);
   for (const f of st.flashes) { // the cell that was just captured glows briefly
     const lane = Math.min(lanes - 1, Math.floor(f.x * lanes)), top = f.y < bandSplit;
-    g.fillStyle = `rgba(57,255,176,${0.18 * (1 - (now - f.t) / 500)})`;
+    g.fillStyle = alpha(T.ok, 0.18 * (1 - (now - f.t) / 500));
     g.fillRect((lane * W) / lanes, top ? 0 : bandSplit * H, W / lanes, (top ? bandSplit : 1 - bandSplit) * H);
   }
 }
@@ -120,7 +125,7 @@ function drawDot(g, x, y, s, st, now) {
   st.ring += (st.progress - st.ring) * 0.2; st.steadyShown += (st.steady - st.steadyShown) * 0.15;
   const pop = locked ? 1 + 0.25 * Math.max(0, 1 - (now - st.stageSince) / 250) : 1, pulse = 1 + 0.1 * Math.sin(now / 180);
   const halo = g.createRadialGradient(x, y, 0, x, y, r * 2.6 * pulse);
-  halo.addColorStop(0, locked ? 'rgba(57,255,176,0.45)' : `rgba(${COLORS.glow},0.4)`); halo.addColorStop(1, 'rgba(0,0,0,0)');
+  halo.addColorStop(0, locked ? alpha(T.ok, 0.45) : alpha(T.accent, 0.4)); halo.addColorStop(1, 'rgba(0,0,0,0)');
   g.fillStyle = halo; g.beginPath(); g.arc(x, y, r * 2.6 * pulse, 0, 7); g.fill();
 
   if (st.phase === 'dots' && st.stage === 'seeking') {        // eyes still travelling: searching ring
@@ -130,21 +135,20 @@ function drawDot(g, x, y, s, st, now) {
   } else if (st.phase !== 'pursuit') {
     if (st.phase === 'dots' || st.phase === 'hops') drawReticle(g, x, y, r, s, locked ? 1 : st.steadyShown, now);
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 6 * s; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
-    g.strokeStyle = locked ? COLORS.ok : COLORS.ring; g.lineCap = 'round';
+    g.strokeStyle = locked ? T.ok : T.warn; g.lineCap = 'round';
     g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, locked ? 1 : st.ring)); g.stroke(); g.lineCap = 'butt';
     const lookingAway = !locked && st.stage === 'capturing' && st.onTarget === false && now - st.onTargetSince > 600;
-    if (lookingAway) text(g, 'look at the dot', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
-    else if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, 'rgba(255,211,77,0.9)');
+    if (lookingAway) text(g, 'look at the dot', x, y + r * 2.4, 14 * s, T.warn);
+    else if (st.phase === 'dots' && !locked && st.steadyShown < 0.45 && now - st.stageSince > 500) text(g, 'hold steady', x, y + r * 2.4, 14 * s, T.warn);
   }
-  g.fillStyle = COLORS.dot; g.beginPath(); g.arc(x, y, r * 0.5 * pop, 0, 7); g.fill();
-  g.fillStyle = locked ? COLORS.ok : COLORS.core; g.beginPath(); g.arc(x, y, r * 0.16 * pop, 0, 7); g.fill();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, r * 0.5 * pop, 0, 7); g.fill();
+  g.fillStyle = locked ? T.ok : T.bad; g.beginPath(); g.arc(x, y, r * 0.16 * pop, 0, 7); g.fill();
 }
 
 /** Four ticks around the dot: wide and shaky while the eyes wander, closing in as they steady. */
 function drawReticle(g, x, y, r, s, steady, now) {
   const k = Math.max(0, Math.min(1, steady)), gap = r * (1.3 + 1.1 * (1 - k)), jitter = (1 - k) * 5 * s, len = 9 * s;
-  const red = Math.round(255 - 198 * k), green = Math.round(211 + 44 * k), blue = Math.round(77 + 99 * k);
-  g.strokeStyle = `rgba(${red},${green},${blue},0.9)`; g.lineWidth = 2.5 * s;
+  g.strokeStyle = mix(T.warn, T.ok, k); g.lineWidth = 2.5 * s;
   g.beginPath();
   for (let i = 0; i < 4; i++) {
     const a = (i * Math.PI) / 2 + Math.PI / 4, jx = Math.sin(now / 60 + i * 2) * jitter, jy = Math.cos(now / 70 + i * 3) * jitter;
@@ -161,7 +165,7 @@ function drawBursts(g, st, now, s) {
     const k = (now - b.t) / 700;
     for (let i = 0; i < 22; i++) {
       const a = (i / 22) * Math.PI * 2 + i, d = (40 + 90 * k) * s * (0.6 + (i % 3) * 0.25);
-      g.fillStyle = i % 2 ? `rgba(57,255,176,${1 - k})` : `rgba(255,211,77,${1 - k})`;
+      g.fillStyle = i % 2 ? alpha(T.ok, 1 - k) : alpha(T.warn, 1 - k);
       g.beginPath(); g.arc(b.x * W + Math.cos(a) * d, b.y * H + Math.sin(a) * d, (3.5 - 2.5 * k) * s, 0, 7); g.fill();
     }
   }
@@ -171,12 +175,20 @@ function drawHeader(g, W, s, st) {
   const y = 34 * s, w = 190 * s, x0 = W / 2 - (PHASES.length * w) / 2;
   PHASES.forEach(([id, name], i) => {
     const cur = st.phase === id, done = st.phaseDone[id];
-    text(g, `${done ? '✓' : i + 1}  ${name}`, x0 + i * w + w / 2, y, (cur ? 17 : 14) * s, cur ? '#ffd34d' : done ? '#39ffb0' : 'rgba(232,236,255,0.4)');
+    text(g, `${done ? '✓' : i + 1}  ${name}`, x0 + i * w + w / 2, y, (cur ? 17 : 14) * s, cur ? T.warn : done ? T.ok : alpha(T.text, 0.4), T.display);
   });
   const counter = st.phase === 'pursuit' ? '' : `${Math.min(st.index + 1, st.total)} / ${st.total}`;
-  text(g, counter, W / 2, y + 26 * s, 13 * s, 'rgba(232,236,255,0.7)');
+  text(g, counter, W / 2, y + 26 * s, 13 * s, alpha(T.text, 0.7));
 }
 
-function text(g, s, x, y, size, color) {
-  g.font = `600 ${size}px system-ui, sans-serif`; g.textAlign = 'center'; g.fillStyle = color; g.fillText(s, x, y);
+/** Blend two '#rrggbb' colours (k = 0 -> a, 1 -> b). */
+function mix(a, b, k) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return k < 0.5 ? a : b;
+  const [x, y] = [p(a), p(b)];
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(',')})`;
+}
+
+function text(g, s, x, y, size, color, font = T.font) {
+  g.font = `600 ${size}px ${font}`; g.textAlign = 'center'; g.fillStyle = color; g.fillText(s, x, y);
 }

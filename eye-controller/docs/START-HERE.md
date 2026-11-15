@@ -14,12 +14,13 @@ Commands assume the terminal is in the repo folder `EmoryHacks2026-GGC`.
    npm --prefix eye-controller run dev
    ```
 
-5. Cmd+click the `http://localhost:5173` link, make sure it opens in **Chrome**, then go to
-   `http://localhost:5173/debug.html`.
+5. Cmd+click the `http://localhost:5190` link, make sure it opens in **Chrome**, then go to
+   `http://localhost:5190/debug.html`.
 6. Allow the camera. The camera view and eye close-ups should appear on the left.
 7. Type your player name: **jonathan zaharia** (always the same, so the counter tracks you).
 
-Leave that terminal running the whole session.
+Leave that terminal running the whole session. The game uses the same port (5190), so stop
+one server (Ctrl+C) before starting the other.
 
 **First time on a new computer only**, before step 4:
 

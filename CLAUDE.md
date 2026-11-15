@@ -4,8 +4,14 @@ One eye-tracked rhythm game: 4 lanes x 2 bands (top = discrete notes, bottom = s
 We own the **eye-controller** (webcam -> gaze/lane/band signals). The game is built on top by teammates.
 
 ## Layout
-- `eye-controller/` — the engine. All our work happens here. Read `eye-controller/README.md` first:
-  it has the public interface, calibration flow, storage, recording/replay, and a **Code map**.
+- `eye-controller/` — the engine. Read `eye-controller/README.md` first: public interface,
+  calibration flow, storage, recording/replay, and a **Code map**.
+- `game/` — the RhythmEyez game (merged from the game team's branch on 2026-11-15; we now own
+  merging it). It uses only the engine's public entry point and the engine's own face view,
+  calibration and result screens (`game/src/input/calibration-flow.js`, theme 'neon').
+  Game rules and numbers live in `game/src/config/game-config.js`. `cd game && npm test`.
+- Both dev servers use port 5190 (browser storage is per port, so they share calibrations):
+  run one at a time.
 - `app/` — legacy minigames plus teammates' in-progress work (voice input in `app/core/voice.js`,
   possibly a database). **Do not edit, move, or delete anything in `app/`** unless the user asks.
 
@@ -64,7 +70,7 @@ and `src/smoothing/gaze-smoother.js` are first estimates and are expected to mov
   before that they were timed and passed while looking anywhere (and fed wrong samples).
 - v0.5.1: dots are gaze-checked from the 3rd (left/right fit) and 6th (provisional model);
   the checker learns only from dots that passed, so one looked-away dot cannot poison it.
-- The `rhythmeyez-game` branch is the game team's (a Coder commit-attribution workaround):
-  read it for intent, never write to it. All our work goes on `main`.
+- The `rhythmeyez-game` branch was merged into `main` on 2026-11-15. Never write to it; all
+  work goes on `main`.
 - Firestore adapter for the pooled baseline and profiles is not built.
 - TypeScript is optional and not started.
