@@ -39,7 +39,7 @@ export function analyze(samples, rate = ANALYSIS_RATE) {
   const env = normalize(subtractLocalMean(flux, Math.round(frameRate * 0.5)));
 
   // tempo from the autocorrelation of the onset envelope, weighted toward ~120 BPM
-  const { bpm, lag } = estimateTempo(env, frameRate);
+  const { bpm, lag, pulse, pulseContrast } = estimateTempo(env, frameRate);
   const tracked = trackBeats(env, lag).map(f => f / frameRate + centre);
 
   // onsets: local maxima above an adaptive threshold
@@ -73,7 +73,7 @@ export function analyze(samples, rate = ANALYSIS_RATE) {
   // song offset: the first beat on a real hit
   const offset = beats.find(b => onsets.some(o => Math.abs(o.t - b) < 0.035 && o.strength > 0.3)) ?? beats[0] ?? 0;
   return {
-    bpm, period: 60 / bpm, offset, beats, onsets, duration, energyAt, pitchAt,
+    bpm, period: 60 / bpm, offset, beats, onsets, duration, energyAt, pitchAt, pulse, pulseContrast,
     sustained: findSustained(beats, onsets, energyAt, duration),
   };
 }
@@ -98,7 +98,17 @@ function estimateTempo(env, frameRate) {
   const d = a - 2 * b + c;
   const shift = d < 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (a - c)) / d)) : 0;
   const lag = Math.max(minLag, Math.min(maxLag, best + shift));
-  return { lag, bpm: Math.round(((60 * frameRate) / lag) * 10) / 10 };
+  // pulse: how strongly the onset envelope repeats at the beat period (1 = perfectly periodic)
+  let zero = 0;
+  for (const v of env) zero += v * v;
+  zero /= Math.max(1, env.length);
+  const pulse = zero > 0 ? Math.max(0, Math.min(1, ac[best] / zero)) : 0;
+  // contrast: the beat-period peak against the average over all candidate periods (0 = no preferred period)
+  let mean = 0;
+  for (let l = minLag; l <= maxLag; l++) mean += ac[l];
+  mean /= maxLag - minLag + 1;
+  const pulseContrast = zero > mean ? Math.max(0, Math.min(1, (ac[best] - mean) / (zero - mean))) : 0;
+  return { lag, pulse, pulseContrast, bpm: Math.round(((60 * frameRate) / lag) * 10) / 10 };
 }
 
 /** Dynamic-programming beat tracker (Ellis 2007): beats that follow onsets AND keep the tempo. */

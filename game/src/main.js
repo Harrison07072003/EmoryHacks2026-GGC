@@ -42,12 +42,15 @@ store.flushOutbox().catch(() => {});
 
 const root = document.getElementById('app');
 let current = null, currentName = null;
+const screenListeners = new Set();
 
 const app = {
   gaze, dwell, audio, sfx, music, store, settings,
   session: { modeId: null, characterId: settings.characterId, songId: null, songsPlayed: 0, calibratedThisSession: false },
   saveSettings() { saveSettings(settings); audio.setVolumes(settings); },
   toast,
+  /** Called with each new screen name (the Online Library uses it to drop levels after a stage). */
+  onScreen(fn) { screenListeners.add(fn); return () => screenListeners.delete(fn); },
   get screen() { return currentName; },
   /** Switch screen. Unmounts the current one first; any music it left playing is stopped. */
   go(name, screenParams = {}) {
@@ -56,6 +59,7 @@ const app = {
     root.replaceChildren();
     dwell.reset();
     currentName = name;
+    screenListeners.forEach(f => f(name));
     current = SCREENS[name](root, app, screenParams) ?? {};
   },
 };

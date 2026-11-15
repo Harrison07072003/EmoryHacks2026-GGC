@@ -12,7 +12,7 @@ export class HttpError extends Error {
 
 /**
  * @param opts { fetch, userAgent, minIntervalMs, retries, baseDelayMs, log }
- * @returns {{ json(url): Promise<any> }}
+ * @returns {{ json(url): Promise<any>, fetch(url, init): Promise<Response> }}
  */
 export function createPoliteFetch({ fetch = globalThis.fetch, userAgent = DEFAULT_USER_AGENT, minIntervalMs = 1000, retries = 4, baseDelayMs = 1000, log = () => {} } = {}) {
   let queue = Promise.resolve(), nextAt = 0;
@@ -28,13 +28,14 @@ export function createPoliteFetch({ fetch = globalThis.fetch, userAgent = DEFAUL
     return turn;
   };
 
-  async function json(url) {
+  /** A successful Response (2xx), after throttling and retries. */
+  async function politeFetch(url, init = {}) {
     for (let attempt = 0; ; attempt++) {
       await slot();
       let res, retryAfterMs = 0;
       try {
-        res = await fetch(url, { headers: { 'User-Agent': userAgent, Accept: 'application/json' } });
-        if (res.ok) return await res.json();
+        res = await fetch(url, { ...init, headers: { 'User-Agent': userAgent, ...init.headers } });
+        if (res.ok) return res;
         if (res.status !== 429 && res.status < 500) throw new HttpError(res.status, url);   // not retryable
         retryAfterMs = (Number(res.headers?.get?.('retry-after')) || 0) * 1000;
       } catch (e) {
@@ -47,5 +48,9 @@ export function createPoliteFetch({ fetch = globalThis.fetch, userAgent = DEFAUL
       await sleep(delay);
     }
   }
-  return { json };
+
+  return {
+    fetch: politeFetch,
+    json: async url => (await politeFetch(url, { headers: { Accept: 'application/json' } })).json(),
+  };
 }

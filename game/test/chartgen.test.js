@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { beatGrid, gridAccent, snapToGrid } from '../src/services/chartgen/events.js';
-import { DIFFICULTIES, GENERATOR_VERSION, generateCharts } from '../src/services/chartgen/generate.js';
+import { DIFFICULTIES, GENERATOR_VERSION, NotASongError, checkMusic, generateCharts } from '../src/services/chartgen/generate.js';
+import { nonMusicTag } from '../src/services/chartgen/musicality.js';
 import { MIN_MOVE_SEC, enforceRules, validateChart } from '../src/services/chartgen/validate.js';
 import { settleStart } from '../src/services/chartgen/analyze.js';
 import { fft } from '../src/services/chartgen/dsp.js';
@@ -123,9 +124,10 @@ describe('chart generator on synthetic music', () => {
     expect(() => generateCharts({ channels: [new Float32Array(RATE * 5)], sampleRate: RATE, songId: 'x' })).toThrow(/too short/);
   });
 
-  it('still makes a playable chart from near-silence (beat-grid fallback, never crashes)', () => {
+  it('refuses audio without a beat (a sustained pad), but can still chart it when asked', () => {
     const quiet = synth({ drumsUntil: 0, pad: true });
-    const r = generateCharts({ channels: [quiet], sampleRate: RATE, songId: 'q' });
+    expect(() => generateCharts({ channels: [quiet], sampleRate: RATE, songId: 'q' })).toThrow(NotASongError);
+    const r = generateCharts({ channels: [quiet], sampleRate: RATE, songId: 'q', requireSong: false });
     for (const d of DIFFICULTIES) expect(validateChart(r.charts[d], { durationSec: 30 })).toEqual([]);
   });
 });
@@ -151,5 +153,48 @@ describe('chart rules', () => {
   });
   it('uses the same eye-movement limits as tools/check-charts.mjs', () => {
     expect(MIN_MOVE_SEC).toEqual({ practice: 0.7, normal: 0.35, hard: 0.24 });
+  });
+});
+
+// speech-like audio: syllable bursts at irregular times, varying pitch, no steady pulse
+function speechLike(sec = 30, seed = 7) {
+  const x = new Float32Array(RATE * sec);
+  let r = seed;
+  const rnd = () => ((r = (r * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let t = 0.3; t < sec - 0.5;) {
+    const dur = 0.08 + rnd() * 0.25, f = 120 + rnd() * 140;
+    for (let i = 0; i < dur * RATE; i++) {
+      const j = Math.round(t * RATE) + i, env = Math.sin((Math.PI * i) / (dur * RATE));
+      x[j] += env * (0.6 * Math.sin((2 * Math.PI * f * i) / RATE) + 0.3 * Math.sin((2 * Math.PI * 2.7 * f * i) / RATE));
+    }
+    t += dur + 0.03 + rnd() * (rnd() < 0.15 ? 0.6 : 0.15);   // syllables, sometimes a pause
+  }
+  return x;
+}
+
+describe('is it a song? (music with a clear beat)', () => {
+  it('accepts beat-driven music', () => {
+    const v = checkMusic({ channels: [synth({ pad: false, drumsUntil: 30 })], sampleRate: RATE });
+    expect(v.isSong).toBe(true);
+    expect(v.score).toBeGreaterThan(0.4);
+  });
+  it('rejects speech-like audio, a beatless pad and silence', () => {
+    for (const [name, x] of [['speech', speechLike()], ['pad', synth({ drumsUntil: 0 })], ['silence', new Float32Array(RATE * 30)]]) {
+      const v = checkMusic({ channels: [x], sampleRate: RATE });
+      expect(v.isSong, name).toBe(false);
+      expect(v.reasons.length, name).toBeGreaterThan(0);
+    }
+  });
+  it('the generator refuses speech too', () => {
+    expect(() => generateCharts({ channels: [speechLike()], sampleRate: RATE, songId: 's' })).toThrow(/not a playable song/);
+  });
+  it('recognizes non-music archive tags without downloading anything', () => {
+    expect(nonMusicTag(['Rock', 'Spoken Word'])).toBe('spoken word');
+    expect(nonMusicTag(["children's", 'found sounds'])).toBe('found sounds');
+    expect(nonMusicTag(['conceptual writing'])).toBe('conceptual writing');
+    expect(nonMusicTag(['field_recordings'])).toBe('field recordings');
+    expect(nonMusicTag(['electronic', 'dronestep', 'storytelling-rock'])).toBe('storytelling-rock');   // whole word "storytelling"
+    expect(nonMusicTag(['electronic', 'dronestep', 'techno'])).toBeNull();
+    expect(nonMusicTag([])).toBeNull();
   });
 });

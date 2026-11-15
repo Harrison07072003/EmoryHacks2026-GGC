@@ -112,3 +112,16 @@ describe('itemToDocuments', () => {
     expect(docs[0].id).toMatch(/^[\w.-]+$/);
   });
 });
+
+describe('one document per track even when the uploader added several copies', () => {
+  it('groups name.mp3 / name_64kb.mp3 / name_vbr.mp3 / name.ogg and keeps the best format', () => {
+    const files = [
+      { name: 'Track10-DreamSlayer_64kb.mp3', source: 'original', format: '64Kbps MP3', length: '200' },
+      { name: 'Track10-DreamSlayer_vbr.mp3', source: 'original', format: 'VBR MP3', length: '200' },
+      { name: 'Track10-DreamSlayer.ogg', source: 'original', format: 'Ogg Vorbis', length: '200' },
+      { name: 'Track11-Other.ogg', source: 'original', format: 'Ogg Vorbis', length: '180' },
+      { name: 'Track11-Other.mp3', source: 'derivative', format: '128Kbps MP3', original: 'Track11-Other.flac', length: '180' },
+    ];
+    expect(pickAudioFiles(files).map(f => f.name)).toEqual(['Track10-DreamSlayer_vbr.mp3', 'Track11-Other.mp3']);
+  });
+});

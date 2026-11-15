@@ -1,14 +1,14 @@
 // Song id -> level. Used by the server (GET /charts/:id) and by `npm run ingest -- --pregenerate N`.
 //
 //  1. look the song up in Typesense (the client only sends an id: no arbitrary URLs)
-//  2. refuse anything not allowed: unknown, explicit/blocked, ND (or NC unless allowed), non-archive.org audio
+//  2. refuse anything not allowed: unknown, explicit/blocked, not a song, ND (or NC unless allowed), non-archive.org audio
 //  3. first 30 s of audio: disk cache, else an HTTP Range download from archive.org
 //  4. decode -> generate charts (services/chartgen) -> cache by song id + generator version
 //  5. write bpm / difficulty / chart_status / chart_url back to the Typesense document
 import { checkExplicit, compileBlocklist } from '../../src/services/archive/content-filter.js';
 import { isLicenseAllowed } from '../../src/services/archive/licenses.js';
 import { fetchStart, segmentByteBudget } from '../../src/online/audio-segment.js';
-import { GENERATOR_VERSION, generateCharts } from '../../src/services/chartgen/generate.js';
+import { GENERATOR_VERSION, NotASongError, generateCharts } from '../../src/services/chartgen/generate.js';
 import { DEFAULT_USER_AGENT } from '../../src/services/archive/http.js';
 import { withTimeout } from './limits.js';
 
@@ -41,6 +41,7 @@ export function createPipeline({ cfg, typesense, audioCache, chartStore, blockli
 
   function refusal(doc) {
     if (doc.is_explicit !== false) return 'explicit or unchecked';
+    if (doc.is_song !== true) return 'not a playable song';
     if (checkExplicit({ id: doc.id, title: doc.title, artist: doc.artist, album: doc.album, tags: doc.genre }, compiled).explicit) return 'blocked';
     if (!isLicenseAllowed(doc.license_url, { allowNonCommercial: cfg.allowNonCommercial })) return 'license';
     if (!AUDIO_HOSTS.test(doc.audio_url ?? '')) return 'audio source';
@@ -80,6 +81,10 @@ export function createPipeline({ cfg, typesense, audioCache, chartStore, blockli
       log(`  generated ${doc.id}: ${meta.bpm} BPM, difficulty ${meta.difficulty}`);
       return entry;
     } catch (e) {
+      if (e instanceof NotASongError) {   // no clear beat after all: hide it from search
+        await setStatus(doc.id, { chart_status: 'failed', is_song: false, rhythm_score: e.music.score });
+        throw new NotFoundError(`not a playable song (${e.music.reasons.join('; ')})`);
+      }
       await setStatus(doc.id, { chart_status: 'failed' });
       throw e;
     }

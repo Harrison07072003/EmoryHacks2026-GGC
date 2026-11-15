@@ -61,6 +61,13 @@ export function createChartStore(dir) {
       await ready;
       try { return JSON.parse(await readFile(file(id, version), 'utf8')); } catch { return null; }
     },
+    /** Delete every chart made by another generator version (run at server start). Returns the count. */
+    async prune(version) {
+      await ready;
+      const stale = (await readdir(dir)).filter(f => /\.v\d+\.json$/.test(f) && !f.endsWith(`.v${version}.json`));
+      await Promise.all(stale.map(f => rm(join(dir, f), { force: true })));
+      return stale.length;
+    },
     /** Writes this version and deletes the song's charts from older generator versions. */
     async put(id, version, entry) {
       await ready;

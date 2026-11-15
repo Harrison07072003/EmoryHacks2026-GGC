@@ -19,6 +19,12 @@
 //                      limit, but unreliable when tested; bad pages fall back automatically)
 //
 // Explicit tracks (src/config/content-blocklist.json) are skipped and removed from the index.
+// Only SONGS are indexed (src/config/music-filter.json): items tagged as non-music (spoken word,
+// field recordings...) are skipped, and every other track's first 30 s is downloaded and
+// analyzed; tracks without a clear beat are skipped. Verdicts are cached in .cache/ingest/,
+// the audio in the server's cache (online-library/audio/), so levels reuse it.
+//   --skip-audio-check   index without the audio check (those tracks stay hidden from search
+//                        until a run with the check marks them is_song)
 import { parseArgs } from 'node:util';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { GAME_DIR, envFlag, loadEnv } from './env.mjs';
@@ -45,6 +51,7 @@ const { values: o } = parseArgs({
     verbose: { type: 'boolean', short: 'v', default: false },
     scrape: { type: 'boolean', default: false },
     pregenerate: { type: 'string' },
+    'skip-audio-check': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -87,7 +94,9 @@ report = await runIngest({
   collections: o['ia-collections']?.split(',').map(s => s.trim()).filter(Boolean),
   mapOptions: { allowNonCommercial, minSec: Number(o['min-sec']), maxSec: Number(o['max-sec']), blocklist: await loadBlocklist() },
   log: console.log, verbose: o.verbose,
+  checkAudio: o['skip-audio-check'] ? null : await createAudioChecker(),
 });
+await saveVerdicts?.();
 
 if (o['dry-run']) for (const d of report.sample) console.log(JSON.stringify(d, null, 2));
 console.log(`\n${report.tracks} tracks from ${report.items} items in ${Math.round((Date.now() - started) / 1000)}s${report.failed ? `, ${report.failed} failed imports` : ''}${report.removed ? `, ${report.removed} explicit tracks removed from the index` : ''}`);
@@ -97,6 +106,35 @@ if (Object.keys(report.skipped).length) console.log('skipped:', Object.entries(r
 if (o.pregenerate && !o['dry-run']) await pregenerate(Number(o.pregenerate));
 process.exit(report.failed ? 1 : 0);
 
+/**
+ * Is this track a song? Downloads its first 30 s (throttled, Range request; reuses the server's
+ * audio cache), analyzes it like the level generator does. Verdicts are cached per track and
+ * thresholds, so re-runs do not download again.
+ */
+var saveVerdicts;
+async function createAudioChecker() {
+  const { createAudioChecker: make } = await import('../server/lib/audio-check.js').catch(() => {
+    console.error('The audio check needs the server\'s decoders: run `npm run server:install` once (or use --skip-audio-check).');
+    process.exit(2);
+  });
+  const { MUSIC_RULES } = await import('../src/services/chartgen/musicality.js');
+  const { createAudioCache } = await import('../server/lib/stores.js');
+  const { serverConfig } = await import('../server/lib/config.js');
+  const scfg = serverConfig(env);
+  const rulesKey = JSON.stringify(MUSIC_RULES);
+  const file = `${stateDir}audio-checks.json`;
+  let saved = {};
+  try { saved = JSON.parse(await readFile(file, 'utf8')); } catch { /* first run */ }
+  if (saved._rules !== rulesKey) saved = { _rules: rulesKey };   // thresholds changed: check again
+  let unsaved = 0;
+  saveVerdicts = async () => { await mkdir(stateDir, { recursive: true }); await writeFile(file, JSON.stringify(saved)); unsaved = 0; };
+  return make({
+    audioCache: createAudioCache(`${scfg.dataDir}audio`, scfg.audioCacheBytes),
+    fetchFn: http.fetch,
+    verdicts: { get: id => saved[id], set: (id, v) => { saved[id] = v; if (++unsaved >= 20) saveVerdicts(); } },
+  });
+}
+
 /** Generate levels for the most popular songs without a current one, so they start instantly. */
 async function pregenerate(n) {
   const { pipelineFromEnv } = await import('../server/lib/setup.js');
@@ -104,7 +142,7 @@ async function pregenerate(n) {
   console.log(`\npre-generating levels for up to ${n} popular songs`);
   let done = 0, failed = 0, page = 1;
   while (done + failed < n) {
-    const res = await search.search(collection, { q: '*', query_by: 'title', filter_by: 'is_explicit:false', sort_by: 'popularity:desc', per_page: 100, page, include_fields: 'id' });
+    const res = await search.search(collection, { q: '*', query_by: 'title', filter_by: 'is_explicit:false && is_song:true', sort_by: 'popularity:desc', per_page: 100, page, include_fields: 'id' });
     if (!res.hits.length) break;
     for (const { document: { id } } of res.hits) {
       if (done + failed >= n) break;

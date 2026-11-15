@@ -50,8 +50,15 @@ export function createMusic(audio) {
     while (preloaded.length > keep) cache.delete(preloaded.shift());
   }
 
+  /** Drop a decoded buffer from the cache (e.g. an Online Library level that was left). */
+  function forget(url) {
+    cache.delete(url);
+    const i = preloaded.indexOf(url);
+    if (i >= 0) preloaded.splice(i, 1);
+  }
+
   return {
-    load, start, stop, preload,
+    load, start, stop, preload, forget,
     get playing() { return !!current; },
     /** A short preview from `startSec`, faded in and out. Replaces whatever was playing. */
     preview(buffer, startSec, durationSec, fadeSec) {

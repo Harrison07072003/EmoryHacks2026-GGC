@@ -10,8 +10,14 @@ import { ANALYSIS_RATE, analyze } from './analyze.js';
 import { buildEvents } from './events.js';
 import { toMono } from './dsp.js';
 import { enforceRules, validateChart } from './validate.js';
+import { assessMusic } from './musicality.js';
 
-export const GENERATOR_VERSION = 2;   // 2: tempo refinement kept inside 70-180 BPM
+/** The audio is not music with a clear beat (spoken word, drones, noise...): no level. */
+export class NotASongError extends Error {
+  constructor(music) { super(`not a playable song: ${music.reasons.join('; ')}`); this.music = music; }
+}
+
+export const GENERATOR_VERSION = 3;   // 2: tempo kept inside 70-180 BPM; 3: songs without a clear beat are refused
 export const DIFFICULTIES = ['practice', 'normal', 'hard'];
 const END_MARGIN_SEC = 1.5;   // last note this long before the level ends (the audio fades out)
 // Minimum notes per second (straight notes + curve seconds) before a chart counts as too sparse:
@@ -22,14 +28,17 @@ const promote = (events, shift) => (shift ? events.map(e => ({ ...e, accent: Mat
 const density = (chart, sec) => chart.notes.reduce((n, x) => n + (x.type === 'curve' ? x.end - x.t : 1), 0) / sec;
 
 /**
- * @param o { channels: Float32Array[], sampleRate, songId, levelSec (use only the first N seconds) }
+ * @param o { channels: Float32Array[], sampleRate, songId, levelSec (use only the first N seconds),
+ *            requireSong (default true: throw NotASongError for audio without a clear beat) }
  * @returns {{ charts: Record<difficulty, chart>, meta: { bpm, offset, difficulty, notesPerSec, generatorVersion, levelSec } }}
  */
-export function generateCharts({ channels, sampleRate, songId, levelSec = 30 }) {
+export function generateCharts({ channels, sampleRate, songId, levelSec = 30, requireSong = true }) {
   const samples = toMono(channels, sampleRate, ANALYSIS_RATE, levelSec);
   const durationSec = samples.length / ANALYSIS_RATE;
   if (durationSec < 8) throw new Error(`audio too short to make a level (${durationSec.toFixed(1)} s)`);
   const a = analyze(samples, ANALYSIS_RATE);
+  const music = assessMusic(a);
+  if (requireSong && !music.isSong) throw new NotASongError(music);
   const events = buildEvents(a, { endSec: durationSec - END_MARGIN_SEC });
 
   const charts = {};
@@ -53,6 +62,14 @@ export function generateCharts({ channels, sampleRate, songId, levelSec = 30 }) 
       // 1 (calm) .. 5 (dense), from the hard chart: notes per second + share of curve time
       difficulty: Math.max(1, Math.min(5, Math.round(notesPerSec * 2 + hard.filter(n => n.type === 'curve').length * 0.3))),
       generatorVersion: GENERATOR_VERSION, levelSec: Math.round(durationSec * 100) / 100,
+      music: { isSong: music.isSong, score: music.score, ...music.metrics },
     },
   };
+}
+
+/** Analyze the first `levelSec` and decide whether it is a song (used by ingestion). */
+export function checkMusic({ channels, sampleRate, levelSec = 30 }) {
+  const samples = toMono(channels, sampleRate, ANALYSIS_RATE, levelSec);
+  if (samples.length / ANALYSIS_RATE < 8) return { isSong: false, score: 0, reasons: ['shorter than 8 s'], metrics: {} };
+  return assessMusic(analyze(samples, ANALYSIS_RATE));
 }

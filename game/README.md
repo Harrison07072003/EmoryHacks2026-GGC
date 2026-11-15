@@ -114,8 +114,7 @@ Players can search a large catalogue of openly licensed music and play a track a
 automatically generated level. **Built-in songs are unchanged**: the Online Library is added on
 top, behind a **🔍 Search** button on the song select screen.
 
-Status: steps 2–4 of 5 done (search index, ingestion, search screens, voice, level generator,
-game server). Step 5 is polish and caching extras.
+Status: done (steps 1–5). Not built yet, on purpose: saving archive songs ("My Songs").
 
 ```
 archive.org (netlabels + FMA mirror)
@@ -150,6 +149,13 @@ game/server (admin key): Typesense lookup + checks → audio cache → decode �
    modes, scoring, results). It uses the **first 30 seconds** of the song and ends with a short
    fade-out. Artist and license are shown while playing and on the results screen.
 
+**Archive songs are played, not kept.** The level, its audio and the download exist while the
+stage is played (play, its results screen, Retry, recalibration between songs) and are dropped
+as soon as the player leaves for anything else. Results of archive songs are not saved to the
+score history (IndexedDB or Supabase). Saving songs to "My Songs" is a later feature. The
+server's shared chart cache is not per player: it only makes the next request for the same song
+fast.
+
 Keyboard keys press after **1 second** of dwell (the cooldown between keys is 0.3 s); Clear,
 Back and every other button keep the normal 2 seconds. Set in `DWELL.keyActivateMs` /
 `keyCooldownMs` (`src/config/game-config.js`); any element can use `data-dwell-ms`.
@@ -161,6 +167,29 @@ a song.
 **Voice needs Chrome or Edge and an internet connection** (Chrome sends speech to Google's
 recognition service). Firefox has no speech recognition: the voice buttons are disabled with
 a note, and the keyboard works as usual. A blocked microphone is reported the same way.
+
+### Only songs: music with a beat
+
+The library is meant for music that makes a playable level, so tracks are checked twice
+before they become searchable (rules in [`src/config/music-filter.json`](src/config/music-filter.json)):
+
+1. **Tags (no download):** items tagged as non-music are skipped: spoken word, poetry,
+   audiobooks, podcasts, lectures, interviews, readings, field recordings, found sounds,
+   sound effects, soundscapes, drones, meditation...
+2. **Audio:** every other track's **first 30 seconds** (exactly the part the level uses) are
+   downloaded and analyzed like the level generator does. It is a song when the hits repeat at
+   a clear beat period (pulse contrast ≥ 0.30), there is at least 1 hit per second, and at
+   least 60% of the beats have sound. Measured on real archive audio: spoken word, drones and
+   choral music scored ≤ 0.11; beat-driven music ≥ 0.40. If an album's first 3 tracks fail,
+   the rest of it is skipped without downloading.
+
+Songs that pass get `is_song: true` and `rhythm_score` (the pulse contrast) in Typesense; every
+search, the scoped key and the server require `is_song:true`. The server checks again when it
+generates a level; audio without a clear beat is refused (and hidden from search), and the
+player sees "This track does not have a clear enough beat". Verdicts are cached in
+`.cache/ingest/audio-checks.json` (re-checked when the thresholds change) and the downloaded
+audio goes into the server's cache, so generating the level later does not download it again.
+`--verbose` shows every rejected track with its reason.
 
 ### Content rules
 
@@ -236,8 +265,8 @@ and audio); at most `MAX_CONCURRENT_JOBS` generations at once and `MAX_QUEUED_JO
 (then 503); a 60 s job timeout; CORS only for `CORS_ORIGINS`; GET/OPTIONS only.
 
 **Caches** (`online-library/`, generated, gitignored; see its README): `charts/` per song and
-generator version, `audio/` limited to `AUDIO_CACHE_MB` (default 200) with least-recently-used
-eviction.
+generator version (charts of other versions are deleted when the server starts), `audio/`
+limited to `AUDIO_CACHE_MB` (default 200) with least-recently-used eviction.
 
 **Pre-generate** levels for popular songs so they start instantly:
 `npm run ingest -- --limit 0 --pregenerate 50` (`--limit 0` skips ingestion; without it,
@@ -258,8 +287,9 @@ cp .env.example .env              # set TYPESENSE_ADMIN_API_KEY to a long random
 npm run typesense                 # downloads Typesense 30.2 once, starts it on :8108; no-op if running
 npm run typesense:setup           # creates the songs collection + prints the search-only key
 #   copy the printed TYPESENSE_SEARCH_API_KEY / VITE_TYPESENSE_SEARCH_API_KEY lines into .env
-npm run ingest -- --limit 300     # index the most-downloaded allowed tracks
-npm run server:install            # once: the server's two decoder packages
+npm run server:install            # once: the decoder packages (the ingest audio check needs them too)
+npm run ingest -- --limit 300     # index the most-downloaded allowed SONGS (downloads 30 s of each to check:
+                                  #   about 1 track per second, so a few minutes; re-runs reuse the checks)
 npm run server                    # the game server on :8787 (separate terminal)
 npm run dev                       # the game; Vite proxies /typesense and /api
 ```
@@ -276,8 +306,10 @@ override with `TYPESENSE_HOME` / `TYPESENSE_DATA_DIR`). After a workspace restar
 Ingestion options: `--source internet_archive|fma|all`, `--limit N`, `--collection NAME`,
 `--dry-run`, `--restart` (forget progress), `--verbose` (log skipped tracks),
 `--ia-collections a,b`, `--batch N`, `--rate MS` (gap between archive.org requests, default
-1000), `--min-sec / --max-sec` (track length, default 30–600), `--scrape`. `npm run ingest -- -h`
-prints them.
+1000), `--min-sec / --max-sec` (track length, default 30–600), `--scrape`,
+`--skip-audio-check` (index without the song check; those tracks stay hidden from search),
+`--pregenerate N`. `npm run ingest -- -h` prints them. After changing the song or explicit
+rules, re-run with `--restart` so indexed tracks are checked again.
 
 - **Resumable:** progress is saved in `game/.cache/ingest/` after every batch; run the same
   command again to continue.
@@ -325,17 +357,20 @@ prints them.
 | Folder | `src/online/` | Online Library client: config, the one search path, partial audio download, voice session, shared UI |
 | Folder | `src/voice/` | speech recognizer wrapper (auto-restart, errors) and the command parser |
 | Folder | `src/services/chartgen/` | audio → charts (dsp, analyze, events, validate, generate) |
-| Folder | `server/` | `index.js`, `app.js` (routes), `lib/` (config, decode, limits, stores, pipeline, setup), `scripts/` (Typesense start/stop) |
+| Folder | `server/` | `index.js`, `app.js` (routes), `lib/` (config, decode, limits, stores, pipeline, setup, audio-check), `scripts/` (Typesense start/stop) |
 | Folder | `online-library/` | GENERATED levels and audio cache (gitignored, only its README is committed) |
 | Files | `src/online/level.js`, `src/online/registry.js`, `src/screens/online-prepare.js` | Downloading → Analyzing → Ready; generated levels kept apart from `src/songs/` |
 | Screens | `src/screens/online-search.js`, `online-keyboard.js`, `online-results.js` | screens 2–4; `src/styles/online.css` |
 | Config | `src/config/content-blocklist.json` | explicit words/phrases/artists and hand-excluded ids |
+| Config | `src/config/music-filter.json` | what counts as a song: non-music tags and the audio thresholds |
+| Files | `src/services/chartgen/musicality.js` | the song check (pulse contrast, hit rate, activity; non-music tags) |
+| Typesense fields | `is_song` (bool, facet), `rhythm_score` (float, sortable) | added by `typesense:setup` / ingestion to existing collections |
 | Scripts | `tools/ingest.mjs`, `tools/typesense-setup.mjs`, `tools/exclude-song.mjs`, `tools/env.mjs`, `tools/blocklist.mjs`, `server/scripts/start-typesense.sh`, `server/scripts/stop-typesense.sh` | |
 | npm scripts | `typesense`, `typesense:stop`, `typesense:up` (Docker), `typesense:setup`, `ingest` (now with `--pregenerate N`), `exclude-song`, `server`, `server:install`, `test:online` | |
 | Config files | `.env.example`, `docker-compose.yml`; `.cache/` in `.gitignore` | |
 | Env vars (server/tools) | `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_PROTOCOL`, `TYPESENSE_COLLECTION`, `TYPESENSE_ADMIN_API_KEY`, `TYPESENSE_SEARCH_API_KEY`, `ALLOW_NONCOMMERCIAL`, `SERVER_PORT`, `CORS_ORIGINS`, `TRUST_PROXY`, `AUDIO_CACHE_MB`, `ONLINE_LIBRARY_DIR`, `RATE_LIMIT_PER_MIN`, `GENERATION_LIMIT_PER_MIN`, `AUDIO_LIMIT_PER_MIN`, `MAX_CONCURRENT_JOBS`, `MAX_QUEUED_JOBS`, `JOB_TIMEOUT_MS` (all optional except the Typesense ones), `INGEST_USER_AGENT`, `TYPESENSE_HOME` / `TYPESENSE_DATA_DIR` (optional) | |
 | Env vars (browser, public) | `VITE_TYPESENSE_URL`, `VITE_TYPESENSE_SEARCH_API_KEY`, `VITE_TYPESENSE_COLLECTION` (optional), `VITE_SERVER_URL`, `VITE_BASE_PATH` | |
-| Existing files changed | `main.js` (4 screens registered), `screens/songs.js` (Search button), `songs/index.js` (generated-level fallback after built-ins), `audio/music.js` (`preload`), `input/dwell.js` (optional per-button timing), `config/game-config.js` (key dwell), `screens/play.js` (attribution line; ends at `levelEndSec` when a song has one), `screens/results.js` (credit line when a song has an attribution), `index.html` (online.css), `vite.config.js` (`base`, dev proxies, admin-key guard), `package.json` (scripts) | built-in songs and charts are unchanged; `test/builtin-songs-regression.test.js` checks it |
+| Existing files changed | `main.js` (4 screens registered; `app.onScreen` hook), `screens/songs.js` (Search button), `songs/index.js` (generated-level fallback after built-ins), `audio/music.js` (`preload`, `forget`), `input/dwell.js` (optional per-button timing), `config/game-config.js` (key dwell), `screens/play.js` (attribution line; ends at `levelEndSec` when a song has one; results of archive songs are not saved), `screens/results.js` (credit line when a song has an attribution), `index.html` (online.css), `vite.config.js` (`base`, dev proxies, admin-key guard), `package.json` (scripts) | built-in songs and charts are unchanged; `test/builtin-songs-regression.test.js` checks it |
 | Tests | `archive-licenses`, `archive-metadata`, `content-filter`, `search-and-ingest`, `voice-commands`, `online-ui`, `chartgen`, `online-level`, `server`, `dwell-timing`, `builtin-songs-regression`; live: `online-integration` (`npm run test:online`) | |
 
 **Teammate setup**
@@ -345,7 +380,8 @@ cd game && npm install
 cp .env.example .env                       # set TYPESENSE_ADMIN_API_KEY
 npm run typesense                          # or: npm run typesense:up (Docker)
 npm run typesense:setup                    # paste the two printed key lines into .env
+npm run server:install                     # decoders, used by ingestion and the server
 npm run ingest -- --limit 300
-npm run server:install && npm run server   # in a second terminal
+npm run server                             # in a second terminal
 npm run dev
 ```

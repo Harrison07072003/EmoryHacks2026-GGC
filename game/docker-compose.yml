@@ -14,11 +14,7 @@ services:
       --data-dir /data
       --api-key ${TYPESENSE_ADMIN_API_KEY:?set TYPESENSE_ADMIN_API_KEY in game/.env}
       --enable-cors
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8108/health || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    # health: curl -s http://localhost:8108/health  (from the host; npm run typesense:setup checks it too)
 
 volumes:
   typesense-data:

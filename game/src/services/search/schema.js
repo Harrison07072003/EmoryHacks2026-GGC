@@ -23,6 +23,9 @@ export function songsSchema(name = 'songs') {
       // backup. Optional so older documents can be migrated: a missing value never matches the filter.
       { name: 'is_explicit', type: 'bool', facet: true, optional: true },
       { name: 'bitrate_kbps', type: 'int32', index: false, optional: true },
+      // set by ingestion's audio check: music with a clear beat (true) -> searchable; rhythm_score = pulse contrast 0..1
+      { name: 'is_song', type: 'bool', facet: true, optional: true },
+      { name: 'rhythm_score', type: 'float', sort: true, optional: true },
       { name: 'attribution', type: 'string', index: false, optional: true },
       { name: 'item_url', type: 'string', index: false, optional: true },
       { name: 'duration', type: 'int32', sort: true },

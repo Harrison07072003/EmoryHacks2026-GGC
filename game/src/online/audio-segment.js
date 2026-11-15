@@ -72,6 +72,8 @@ export function createSegmentLoader(ctx, { fetchFn, maxEntries = 6 } = {}) {
   }
 
   return {
+    /** Drop a song's downloaded audio. */
+    forget(id) { cache.delete(id); },
     /** @returns Promise<AudioBuffer> */
     get(song, sec, { signal } = {}) {
       const hit = cache.get(song.id);

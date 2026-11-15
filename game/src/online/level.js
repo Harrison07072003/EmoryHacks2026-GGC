@@ -4,15 +4,16 @@
 //   Analyzing    charts from the game server (shared cache, BPM/difficulty written to Typesense);
 //                if the server is unreachable, the same generator runs here in the browser
 //   Ready        registered as a song (src/online/registry.js), so play.js loads it like any other
-import { DIFFICULTIES, generateCharts } from '../services/chartgen/generate.js';
+import { DIFFICULTIES, NotASongError, generateCharts } from '../services/chartgen/generate.js';
 import { seededRandom } from '../services/chartgen/dsp.js';
 import { parseChart } from '../gameplay/chart.js';
 import { SONGS } from '../songs/index.js';
 import { withFadeOut } from './audio-segment.js';
-import { registerOnlineSong } from './registry.js';
+import { clearOnlineSongs, registerOnlineSong } from './registry.js';
 import { getOnline, LEVEL_SEC } from './session.js';
 
 const FADE_SEC = 1.5;
+const NOT_A_SONG = 'This track does not have a clear enough beat to make a level. Try another song.';
 const SERVER_TIMEOUT_MS = 75000;
 
 export class LevelError extends Error {
@@ -79,7 +80,7 @@ export async function prepareLevel(app, song, { onStep = () => {}, signal } = {}
     try { entry = await serverCharts(serverUrl, song.id, signal); if (entry.cached) source = 'cache'; }
     catch (e) {
       if (signal?.aborted) throw e;
-      if (e.status === 404) throw new LevelError('This song is not available.', { retry: false });
+      if (e.status === 404) throw new LevelError(/not a playable song/.test(e.message) ? NOT_A_SONG : 'This song is not available.', { retry: false });
       if (e.status === 429) throw new LevelError('Too many new levels at once. Wait a minute and try again.');
       entry = null;   // server down or failing: generate here instead
     }
@@ -88,7 +89,7 @@ export async function prepareLevel(app, song, { onStep = () => {}, signal } = {}
     source = 'browser';
     await nextFrame();
     try { entry = generateCharts({ channels: channelsOf(level), sampleRate: level.sampleRate, songId: song.id, levelSec: LEVEL_SEC }); }
-    catch (e) { throw new LevelError(`A level could not be made from this song (${e.message}).`, { retry: false }); }
+    catch (e) { throw new LevelError(e instanceof NotASongError ? NOT_A_SONG : `A level could not be made from this song (${e.message}).`, { retry: false }); }
   }
   for (const d of DIFFICULTIES) {
     try { parseChart(entry.charts?.[d]); } catch { throw new LevelError('The generated level was invalid.', { retry: false }); }
@@ -96,6 +97,26 @@ export async function prepareLevel(app, song, { onStep = () => {}, signal } = {}
 
   const levelSong = registerOnlineSong(toLevelSong(song, entry, level.duration));
   app.music.preload(levelSong.audioUrl, level);
+  dropLevelsAfterStage(app);
   onStep('ready');
   return { song: levelSong, source };
+}
+
+// Screens that belong to playing a stage. Leaving them for anything else (song select, search,
+// title...) discards the generated level: nothing about an archive song is kept.
+const STAGE_SCREENS = new Set(['play', 'results', 'calibration', 'faceCheck']);
+const watching = new WeakSet();
+
+export function dropLevelsAfterStage(app) {
+  if (watching.has(app) || !app.onScreen) return;
+  watching.add(app);
+  app.onScreen(name => { if (!STAGE_SCREENS.has(name)) discardLevels(app); });
+}
+
+/** Forget every generated level, its decoded audio and its downloaded bytes. */
+export function discardLevels(app) {
+  for (const song of clearOnlineSongs()) {
+    app.music.forget?.(song.audioUrl);
+    app.online?.segments?.forget?.(song.id);
+  }
 }

@@ -11,11 +11,12 @@ export async function pipelineFromEnv(env, { log = () => {}, concurrent } = {}) 
   const cfg = serverConfig(env);
   const blocklist = JSON.parse(await readFile(new URL('../../src/config/content-blocklist.json', import.meta.url), 'utf8'));
   const typesense = cfg.typesense ? createTypesenseClient(cfg.typesense) : null;
+  const chartStore = createChartStore(`${cfg.dataDir}charts`);
   const pipeline = createPipeline({
     cfg, log, blocklist, typesense,
     audioCache: createAudioCache(`${cfg.dataDir}audio`, cfg.audioCacheBytes),
-    chartStore: createChartStore(`${cfg.dataDir}charts`),
+    chartStore,
     queue: createJobQueue({ concurrent: concurrent ?? cfg.limits.concurrentJobs, queued: concurrent ? 1e6 : cfg.limits.queuedJobs }),
   });
-  return { cfg, pipeline, typesense };
+  return { cfg, pipeline, typesense, chartStore };
 }

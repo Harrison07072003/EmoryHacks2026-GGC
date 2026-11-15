@@ -15,13 +15,15 @@ const freshState = () => ({ cursor: null, offset: 0, items: 0, tracks: 0, done: 
  * @param o {
  *   archive, search (null in dry run), collection, sources: string[], limit (tracks, Infinity = all),
  *   batchSize, dryRun, mapOptions: { allowNonCommercial, minSec, maxSec }, collections (IA override),
- *   state: { load(source), save(source, st) }, log, verbose (log every skipped track)
+ *   state: { load(source), save(source, st) }, log, verbose (log every skipped track),
+ *   checkAudio: async doc -> { isSong, score, reasons } (optional; analyzes the track's first 30 s)
  * }
  * @returns {{ tracks, items, failed, removed, skipped: Record<string, number>, sample: object[] }}
  */
-export async function runIngest({ archive, search, collection = 'songs', sources, limit = Infinity, batchSize = 100, dryRun = false, mapOptions = {}, collections, state, log = () => {}, verbose = false }) {
+export async function runIngest({ archive, search, collection = 'songs', sources, limit = Infinity, batchSize = 100, dryRun = false, mapOptions = {}, collections, state, log = () => {}, verbose = false, checkAudio = null }) {
   const report = { tracks: 0, items: 0, failed: 0, removed: 0, skipped: {}, sample: [] };
-  const skip = reason => { const key = reason.startsWith('duration') ? 'duration out of range' : reason.startsWith('explicit') ? 'explicit' : reason; report.skipped[key] = (report.skipped[key] ?? 0) + 1; };
+  const GROUPS = [['duration', 'duration out of range'], ['explicit', 'explicit'], ['not a song', 'not a song (audio check)'], ['not music', 'not music (tags)']];
+  const skip = reason => { const key = GROUPS.find(([p]) => reason.startsWith(p))?.[1] ?? reason; report.skipped[key] = (report.skipped[key] ?? 0) + 1; };
   let buffer = [], excluded = [];
   const seen = new Set();   // identifiers handled in this run: a page of only seen items means the API is looping
 
@@ -72,9 +74,10 @@ export async function runIngest({ archive, search, collection = 'songs', sources
         skipped.forEach(s => { skip(s.reason); if (verbose) log(`  - skip ${item.identifier}/${s.name}: ${s.reason}`); });
         excluded.push(...excludedIds);   // explicit now: remove from the index if an earlier run added it
         const room = limit - report.tracks - buffer.length;
-        buffer.push(...docs.slice(0, room));
+        const { kept, complete } = checkAudio ? await keepSongs(item, docs, room) : { kept: docs, complete: docs.length <= room };
+        buffer.push(...kept.slice(0, room));
         // limit hit inside this item: stop here and resume AT this item next time (emplace is idempotent)
-        if (docs.length > room) { report.items++; await flush(); await save(i); return report; }
+        if (!complete) { report.items++; await flush(); await save(i); return report; }
         st.items++; report.items++;
         if (buffer.length >= batchSize) {
           await flush();
@@ -90,4 +93,31 @@ export async function runIngest({ archive, search, collection = 'songs', sources
     }
   }
   return report;
+
+  /**
+   * Only music with a clear beat: analyze each track's first 30 s. Tracks that fail are removed
+   * from the index if an earlier run added them. If an item's first 3 tracks all fail, the rest
+   * of it is skipped without downloading (an album of speech, drones...).
+   * @returns { kept: songs, complete: false when the limit stopped it part-way }
+   */
+  async function keepSongs(item, docs, room) {
+    const kept = [];
+    for (let k = 0; k < docs.length; k++) {
+      if (kept.length >= room) return { kept, complete: false };
+      const doc = docs[k];
+      let verdict;
+      try { verdict = await checkAudio(doc); }
+      catch (e) { skip('audio check failed'); if (verbose) log(`  - skip ${doc.source_id}: audio check failed (${e.message})`); continue; }
+      if (verdict.isSong) { kept.push({ ...doc, is_song: true, rhythm_score: verdict.score }); continue; }
+      skip('not a song');
+      excluded.push(doc.id);
+      if (verbose) log(`  - skip ${doc.source_id}: not a song (${verdict.reasons.join('; ')})`);
+      if (k === 2 && !kept.length) {
+        for (const rest of docs.slice(3)) { skip('not a song'); excluded.push(rest.id); }
+        if (verbose) log(`  - skip the rest of ${item.identifier}: its first 3 tracks are not songs`);
+        break;
+      }
+    }
+    return { kept, complete: true };
+  }
 }

@@ -191,12 +191,22 @@ describe('Online Library flow', () => {
     await until(() => app.debugPlay?.chart());
     expect(app.debugPlay.chart().notes).toHaveLength(3);
     expect($('.hud-attr').textContent).toContain('CC BY 4.0');      // attribution while playing
-    byText('.gbtn', 'Quit').click();
-    await until(() => $('.popup'));
-    byText('.popup .gbtn', 'Song select').click();
-    await until(() => app.screen === 'songs');
-    expect($$('.song-card')).toHaveLength(3);                          // built-in list untouched
   }, 20000);
+
+  it('the stage plays to the end; nothing about the archive song is kept after leaving it', async () => {
+    const { songById } = await import('../src/songs/index.js');
+    await until(() => app.screen === 'results', 30000);              // the level ends at levelEndSec
+    expect($('#app').textContent).toContain('Credit');                // attribution on the results screen
+    expect(songById('ia_item3_k3')).toBeTruthy();                     // still there for Retry
+    expect((await app.store.listResults()).some(r => r.song_id === 'ia_item3_k3')).toBe(false);   // result not saved
+    byText('.gbtn', 'Song select').click();
+    await until(() => app.screen === 'songs');
+    expect(songById('ia_item3_k3')).toBeUndefined();                  // level dropped when the stage was left
+    const before = requests.length;
+    await app.music.load('online:ia_item3_k3').catch(() => {});
+    expect(requests.slice(before).some(r => r.url === 'online:ia_item3_k3')).toBe(true);   // its audio too: no longer cached
+    expect($$('.song-card')).toHaveLength(3);                          // built-in list untouched
+  }, 40000);
 
   it('no runtime errors', () => {
     expect(errors).toEqual([]);

@@ -171,7 +171,8 @@ export default function play(root, app) {
     el.classList.remove('frenzy'); portrait.classList.remove('frenzy');
     const result = buildResult({ song, mode, character, scoring: scoring.state, chart, failed, songTime: t, stats: stats.summary(), gaze, settings: app.settings });
     app.session.songsPlayed++;
-    app.store.saveResult(result).catch(e => app.toast(`Result not saved: ${e.message}`));
+    // archive songs are played, not kept: their results are not saved (no "My Songs" yet)
+    if (!song.online) app.store.saveResult(result).catch(e => app.toast(`Result not saved: ${e.message}`));
     setTimeout(() => { if (state !== 'gone') app.go('results', { result }); }, failed ? 1600 : 1400);
   }
   function fail(t) {

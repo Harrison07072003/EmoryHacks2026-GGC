@@ -10,7 +10,7 @@ describe('search params', () => {
     const p = buildSearchParams({ q: 'lofi bea' });
     expect(p).toMatchObject({ q: 'lofi bea', query_by: 'title,artist,album,genre', prefix: true, num_typos: 2, facet_by: 'genre,source,difficulty', page: 1, per_page: 20 });
     expect(p.sort_by).toBe('_text_match:desc,popularity:desc');
-    expect(p.filter_by).toBe('is_explicit:false');
+    expect(p.filter_by).toBe('is_explicit:false && is_song:true');
   });
 
   it('empty query browses popular first', () => {
@@ -20,8 +20,8 @@ describe('search params', () => {
 
   it('builds quoted filters and sorts', () => {
     const p = buildSearchParams({ genres: ['drum & bass', 'lo-fi, chill'], difficulties: [2, 3], sort: 'bpm', page: 3, perPage: 500 });
-    expect(p.filter_by).toBe('is_explicit:false && genre:=[`drum & bass`,`lo-fi, chill`] && difficulty:=[2,3]');
-    expect(buildSearchParams({ excludeIds: ['ia_a_1', 'fma_b'] }).filter_by).toBe('is_explicit:false && id:!=[`ia_a_1`,`fma_b`]');
+    expect(p.filter_by).toBe('is_explicit:false && is_song:true && genre:=[`drum & bass`,`lo-fi, chill`] && difficulty:=[2,3]');
+    expect(buildSearchParams({ excludeIds: ['ia_a_1', 'fma_b'] }).filter_by).toBe('is_explicit:false && is_song:true && id:!=[`ia_a_1`,`fma_b`]');
     expect(p.sort_by).toBe('bpm(missing_values: last):asc,popularity:desc');
     expect(p.page).toBe(3);
     expect(p.per_page).toBe(100);
@@ -118,7 +118,7 @@ function fakes({ pages, items }) {
     search: async (q, { cursor }) => pages[cursor ?? 'start'],
     metadata: async id => { if (!items[id]) throw new Error('HTTP 404'); return items[id]; },
   };
-  const search = { importDocuments: async (c, docs) => { imported.push(...docs); return docs.map(() => ({ success: true })); } };
+  const search = { importDocuments: async (c, docs) => { imported.push(...docs); return docs.map(() => ({ success: true })); }, deleteDocuments: async (c, ids) => ids.length };
   const saved = {};
   const state = { load: async s => saved[s] ?? null, save: async (s, st) => { saved[s] = JSON.parse(JSON.stringify(st)); } };
   return { archive, search, state, imported, saved };
@@ -170,6 +170,35 @@ describe('runIngest', () => {
     const r = await runIngest({ ...f, sources: ['internet_archive'] });
     expect(r.tracks).toBe(2);
     expect(f.imported).toHaveLength(2);
+  });
+
+  it('with an audio check, keeps only songs (marked is_song + rhythm_score) and removes the rest', async () => {
+    const f = fakes({ pages: { start: { items: [{ identifier: 'a' }, { identifier: 'c' }], cursor: null } }, items });
+    const removed = [];
+    f.search.deleteDocuments = async (c, ids) => { removed.push(...ids); return ids.length; };
+    const checked = [];
+    const checkAudio = async d => { checked.push(d.id); return d.source_id.startsWith('a/') ? { isSong: true, score: 0.6, reasons: [] } : { isSong: false, score: 0.05, reasons: ['no clear beat'] }; };
+    const r = await runIngest({ ...f, sources: ['internet_archive'], checkAudio });
+    expect(f.imported.map(d => [d.source_id, d.is_song, d.rhythm_score])).toEqual([['a/0.mp3', true, 0.6], ['a/1.mp3', true, 0.6]]);
+    expect(r.skipped['not a song (audio check)']).toBe(3);
+    expect(removed).toHaveLength(3);
+  });
+
+  it('stops downloading an album whose first 3 tracks are not songs', async () => {
+    const f = fakes({ pages: { start: { items: [{ identifier: 'big' }], cursor: null } }, items: { big: meta('big', 8) } });
+    const checked = [];
+    await runIngest({ ...f, sources: ['internet_archive'], checkAudio: async d => { checked.push(d.id); return { isSong: false, score: 0, reasons: ['x'] }; } });
+    expect(checked).toHaveLength(3);
+    expect(f.imported).toHaveLength(0);
+  });
+
+  it('skips items tagged as non-music before any audio is checked', async () => {
+    const speech = { ...meta('talk'), metadata: { ...meta('talk').metadata, subject: ['Spoken Word', 'poetry'] } };
+    const f = fakes({ pages: { start: { items: [{ identifier: 'talk' }], cursor: null } }, items: { talk: speech } });
+    let checks = 0;
+    const r = await runIngest({ ...f, sources: ['internet_archive'], checkAudio: async () => { checks++; return { isSong: true, score: 1, reasons: [] }; } });
+    expect(checks).toBe(0);
+    expect(r.skipped['not music (tags)']).toBe(1);
   });
 
   it('dry run writes nothing and returns a sample', async () => {

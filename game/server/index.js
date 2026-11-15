@@ -4,9 +4,12 @@ import { createServer } from 'node:http';
 import { loadEnv } from '../tools/env.mjs';
 import { pipelineFromEnv } from './lib/setup.js';
 import { createApp } from './app.js';
+import { GENERATOR_VERSION } from '../src/services/chartgen/generate.js';
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
-const { cfg, pipeline } = await pipelineFromEnv(loadEnv(), { log });
+const { cfg, pipeline, chartStore } = await pipelineFromEnv(loadEnv(), { log });
+const pruned = await chartStore.prune(GENERATOR_VERSION);
+if (pruned) log(`removed ${pruned} chart(s) made by older generator versions`);
 if (!cfg.typesense) log('! TYPESENSE_HOST / TYPESENSE_ADMIN_API_KEY not set: every level request will fail');
 
 createServer(createApp({ cfg, pipeline, log })).listen(cfg.port, cfg.host, () => {

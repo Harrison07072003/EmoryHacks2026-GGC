@@ -2,6 +2,7 @@
 // document per playable TRACK. Pure functions; the network lives in ia-client.js.
 import { attributionText, isCommercialOk, isLicenseAllowed, parseLicense } from './licenses.js';
 import { checkExplicit, compileBlocklist } from './content-filter.js';
+import { nonMusicTag } from '../chartgen/musicality.js';
 
 const NO_BLOCKLIST = compileBlocklist();
 
@@ -32,6 +33,12 @@ function formatRank(file) {
 }
 
 /**
+ * Same track, different upload: uploaders often add "song.mp3", "song_64kb.mp3", "song_vbr.mp3"
+ * and "song.ogg" side by side, all marked as originals. Ignore extension and quality suffix.
+ */
+export const trackKey = name => String(name).replace(/\.[^./]+$/, '').replace(/[_ -](\d{2,3}kb(ps)?|vbr|cbr|hq|lq|hi|lo)$/i, '').toLowerCase();
+
+/**
  * Pick one playable file per track. IA lists the original (often FLAC) plus derivatives;
  * files that share an `original` (or are that original) are the same track.
  */
@@ -40,7 +47,7 @@ export function pickAudioFiles(files = []) {
   for (const file of files) {
     const rank = formatRank(file);
     if (rank < 0) continue;
-    const key = file.source === 'derivative' && file.original ? file.original : file.name;
+    const key = trackKey(file.source === 'derivative' && file.original ? file.original : file.name);
     const cur = best.get(key);
     if (!cur || rank < cur.rank) best.set(key, { file, rank });
   }
@@ -89,6 +96,9 @@ export function itemToDocuments(meta, { source = 'internet_archive', allowNonCom
   if (!isLicenseAllowed(license, { allowNonCommercial })) {
     return { docs: [], skipped: [{ name: identifier, reason: `license ${license.ok ? license.name : one(m.licenseurl) || 'missing'}` }], excludedIds: [] };
   }
+  // not music at all (spoken word, field recordings...): skip before any audio is downloaded
+  const notMusic = nonMusicTag([...list(m.subject).flatMap(s => String(s).split(/[;,]/)), ...list(m.collection), ...(meta.files ?? []).flatMap(f => list(f.genre))]);
+  if (notMusic) return { docs: [], skipped: [{ name: identifier, reason: `not music (tag "${notMusic}")` }], excludedIds: [] };
   const itemArtist = tidy(one(m.creator)), itemAlbum = tidy(one(m.title));
   const itemUrl = `https://archive.org/details/${identifier}`;
   const fmaUrl = source === 'fma' ? tidy(one(m.source)) : '';

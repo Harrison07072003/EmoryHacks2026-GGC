@@ -18,7 +18,7 @@ const RATE = 22050;
 const OK_LICENSE = 'http://creativecommons.org/licenses/by/4.0/';
 const doc = (id, over = {}) => ({
   id, title: 'Song', artist: 'Artist', album: 'A', genre: ['rock'], license_url: OK_LICENSE, license_name: 'CC BY 4.0',
-  attribution: '"Song" by Artist · CC BY 4.0', item_url: 'https://archive.org/details/x', is_explicit: false,
+  attribution: '"Song" by Artist · CC BY 4.0', item_url: 'https://archive.org/details/x', is_explicit: false, is_song: true,
   audio_url: 'https://archive.org/download/x/song.mp3', bitrate_kbps: 128, ...over,
 });
 
@@ -42,6 +42,8 @@ beforeAll(async () => {
     ia_flag_1: doc('ia_flag_1', { is_explicit: true }),
     ia_host_1: doc('ia_host_1', { audio_url: 'https://evil.example/download/x.mp3' }),
     ia_blocked_1: doc('ia_blocked_1'),
+    ia_speech_1: doc('ia_speech_1', { is_song: false }),
+    ia_unchecked_1: doc('ia_unchecked_1', { is_song: undefined }),
   };
   const typesense = {
     getDocument: async (c, id) => { if (!docs[id]) throw Object.assign(new Error('nf'), { status: 404 }); return docs[id]; },
@@ -86,8 +88,8 @@ describe('server routes', () => {
     expect((await readdir(join(dir, 'charts')))).toContain(`ia_ok_1.v${GENERATOR_VERSION}.json`);
   });
 
-  it('refuses ND, NC (flag off), explicit, flagged, blocklisted, unknown and non-archive.org songs', async () => {
-    for (const id of ['ia_nd_1', 'ia_nc_1', 'ia_explicit_1', 'ia_flag_1', 'ia_blocked_1', 'ia_unknown_1', 'ia_host_1']) {
+  it('refuses ND, NC (flag off), explicit, flagged, blocklisted, not-a-song, unchecked, unknown and non-archive.org songs', async () => {
+    for (const id of ['ia_nd_1', 'ia_nc_1', 'ia_explicit_1', 'ia_flag_1', 'ia_blocked_1', 'ia_speech_1', 'ia_unchecked_1', 'ia_unknown_1', 'ia_host_1']) {
       const res = await get(`/charts/${id}`);
       expect(res.status, id).toBe(404);
     }
@@ -174,6 +176,14 @@ describe('limits and caches', () => {
     expect(await store.get('ia_v_1', 1)).toBeNull();
     expect(await store.get('ia_v_1', 2)).toEqual({ v: 2 });
     expect(await store.get('ia_v_10', 1)).toEqual({ other: true });   // another song with a similar id is untouched
+  });
+
+  it('prune removes charts of other generator versions only', async () => {
+    const store = createChartStore(join(dir, 'prune'));
+    await store.put('ia_p_1', 1, {}); await store.put('ia_p_2', 1, {}); await store.put('ia_p_3', 3, {});
+    expect(await store.prune(3)).toBe(2);
+    expect(await store.get('ia_p_3', 3)).toEqual({});
+    expect(await store.get('ia_p_1', 1)).toBeNull();
   });
 
   it('config reads the hosting env vars', () => {

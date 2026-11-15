@@ -20,11 +20,11 @@ const quote = v => `\`${String(v).replace(/`/g, '')}\``;
  * @param o { q, genres: string[], difficulties: number[], sources: string[], sort, page, perPage, seed,
  *            excludeIds: string[] (hand-excluded songs) }
  *
- * `is_explicit:false` is ALWAYS applied (a backup: explicit tracks are not ingested, and the
- * client's scoped key filters them too).
+ * `is_explicit:false` and `is_song:true` are ALWAYS applied (backups: explicit and non-song
+ * tracks are not ingested, and the client's scoped key filters them too).
  */
 export function buildSearchParams({ q = '', genres = [], difficulties = [], sources = [], sort = 'relevance', page = 1, perPage = 20, seed = 0, excludeIds = [] } = {}) {
-  const filters = ['is_explicit:false'];
+  const filters = ['is_explicit:false', 'is_song:true'];
   if (excludeIds.length) filters.push(`id:!=[${excludeIds.map(quote).join(',')}]`);
   if (genres.length) filters.push(`genre:=[${genres.map(quote).join(',')}]`);
   if (difficulties.length) filters.push(`difficulty:=[${difficulties.map(d => Math.round(d)).join(',')}]`);

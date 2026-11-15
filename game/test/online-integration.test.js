@@ -22,6 +22,8 @@ describe.skipIf(!RUN)('online pipeline (live)', async () => {
   const { songsSchema } = await import('../src/services/search/schema.js');
   const { createOnlineSearch } = await import('../src/online/search-client.js');
   const { pipelineFromEnv } = await import('../server/lib/setup.js');
+  const { createAudioChecker } = await import('../server/lib/audio-check.js');
+  const { createAudioCache } = await import('../server/lib/stores.js');
   const { toLevelSong } = await import('../src/online/level.js');
   const { registerOnlineSong } = await import('../src/online/registry.js');
   const { loadChart, songById } = await import('../src/songs/index.js');
@@ -38,18 +40,22 @@ describe.skipIf(!RUN)('online pipeline (live)', async () => {
 
   let songs = [];
 
-  it('ingests about 20 tracks', async () => {
+  it('ingests about 20 SONGS (tag filter + audio check)', async () => {
     await admin.ensureCollection(songsSchema(COLLECTION));
     const saved = {};
+    const http = createPoliteFetch({ minIntervalMs: 500 });
     const report = await runIngest({
-      archive: createArchiveClient(createPoliteFetch({ minIntervalMs: 500 })),
+      archive: createArchiveClient(http),
+      checkAudio: createAudioChecker({ audioCache: createAudioCache(`${dataDir}/audio`, 100 * 1024 * 1024), fetchFn: http.fetch }),
       search: admin, collection: COLLECTION, sources: ['internet_archive'], limit: 20, batchSize: 10,
       mapOptions: { blocklist: compileBlocklist(blocklist) },
       state: { load: async s => saved[s] ?? null, save: async (s, st) => { saved[s] = st; } },
     });
     expect(report.tracks).toBe(20);
     expect(report.failed).toBe(0);
-  }, 180000);
+    const docs = (await admin.search(COLLECTION, { q: '*', query_by: 'title', per_page: 50 })).hits.map(h => h.document);
+    expect(docs.every(d => d.is_song === true && d.rhythm_score >= 0.3)).toBe(true);
+  }, 900000);
 
   it('finds them through the game\'s search path (top 5, explicit filtered)', async () => {
     const search = createOnlineSearch({ typesenseUrl: cfg.url, searchKey: cfg.apiKey, collection: COLLECTION, searchEnabled: true });

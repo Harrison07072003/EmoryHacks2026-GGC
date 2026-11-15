@@ -4,8 +4,8 @@
 // The admin key is only ever used here, in tools/ingest.mjs and in game/server.
 //
 // The printed key is a *scoped* key with a filter embedded that Typesense applies to every
-// search: `is_explicit:false`, plus `is_commercial_ok:true` unless ALLOW_NONCOMMERCIAL=true.
-// So the game can never see explicit or NC tracks, whatever filter the client sends.
+// search: `is_explicit:false && is_song:true`, plus `is_commercial_ok:true` unless
+// ALLOW_NONCOMMERCIAL=true. So the game can never see explicit, non-song or NC tracks.
 import { createHmac } from 'node:crypto';
 import { envFlag, loadEnv } from './env.mjs';
 import { createTypesenseClient, typesenseConfig } from '../src/services/search/typesense.js';
@@ -30,7 +30,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   const key = await ts.createKey({ description: `RhythmEyez game client: search ${cfg.collection} only`, actions: ['documents:search'], collections: [cfg.collection] });
-  const filter = envFlag(env.ALLOW_NONCOMMERCIAL, false) ? 'is_explicit:false' : 'is_explicit:false && is_commercial_ok:true';
+  const filter = `is_explicit:false && is_song:true${envFlag(env.ALLOW_NONCOMMERCIAL, false) ? '' : ' && is_commercial_ok:true'}`;
   const clientKey = scopedSearchKey(key.value, { filter_by: filter });
   console.log(`\nSearch-only key (id ${key.id}, scoped to "${filter}"). Put this in game/.env:\n`);
   console.log(`TYPESENSE_SEARCH_API_KEY=${clientKey}`);
