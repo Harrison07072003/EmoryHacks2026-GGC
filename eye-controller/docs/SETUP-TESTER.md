@@ -14,7 +14,9 @@ Stop the game server first (both use port 5190), then:
 npm --prefix eye-controller run dev
 ```
 
-Open `http://localhost:5190/setup.html` in Chrome. (`?mock` tries it without a camera.)
+Open `http://localhost:5190/setup.html` in Chrome, **without `?mock`** (`?mock` is simulated eyes for
+trying the page: it always scores 100 and saves nothing). Saves land in the `setups/` folder of
+whichever machine runs the dev server: on Coder, that is the Coder workspace, not your laptop.
 
 ## One setup (about 2 minutes)
 
@@ -61,4 +63,6 @@ updated from these results before any of this goes into the game's face check.
 | Head angle | head tilt and turn | within 0.15 / 0.25 rad |
 | Light on face | eye brightness | 60+ of 255 |
 | Eye size | eye-corner distance in camera pixels | 50+ px |
+| Glare on glasses | share of blown-out pixels in the worse eye | under 1% (bad over 3%) |
+| Pupil contrast | how clearly the pupil stands out (better eye) | 18+ |
 | Range test | eye movement edge to edge (eye-width units) | left-right 0.15+ (0.10+ with glasses), up-down 0.022+ |

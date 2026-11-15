@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { measureSetup, rangeAdvice, rangeFromHolds, setupChecks, setupScore } from '../src/setup/setup-score.js';
 import { createSimEye } from '../src/simulator/sim-eye.js';
 
-const eye = (lum = 66) => ({ open: 0.3, glare: 0.002, conf: 0.2, lum });
+const eye = (lum = 66, glare = 0.002) => ({ open: 0.3, glare, conf: 0.2, lum });
 const frame = ({ w = 0.25, cx = 0.5, cy = 0.6, pitch = -0.03, yaw = 0.02, lum = 66 } = {}) => ({
   face: true, box: { x: cx - w / 2, y: cy - 0.15, w, h: 0.3 }, head: [yaw, pitch, 0.5, 0.5, w], eyes: { R: eye(lum), L: eye(lum) },
 });
@@ -20,6 +20,11 @@ describe('setup checks (thresholds from recorded clips)', () => {
   it('the backlit clips (face low in the image) say tilt the screen', () => {
     expect(status(measureSetup(frame({ cy: 0.84 })), 'camera')).toBe('bad');
     expect(setupChecks(measureSetup(frame({ cy: 0.84 }))).find(x => x.id === 'camera').advice).toMatch(/tilt the screen forward/);
+  });
+  it('glare on glasses is flagged and costs score', () => {
+    const glary = measureSetup({ ...frame(), eyes: { R: eye(66, 0.05), L: eye(66, 0.002) } });
+    expect(setupChecks(glary).find(c => c.id === 'glare')).toMatchObject({ status: 'bad' });
+    expect(setupScore(setupChecks(glary), null)).toBeLessThan(setupScore(setupChecks(measureSetup(frame())), null));
   });
   it("looking up at the screen (Harrison's clips) is flagged", () => {
     expect(setupChecks(measureSetup(frame({ pitch: 0.17 }))).find(x => x.id === 'head').advice).toMatch(/eye level/);

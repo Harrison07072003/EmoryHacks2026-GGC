@@ -31,6 +31,7 @@ setInterval(() => {
   const score = setupScore(lastChecks, range);
   $('score').textContent = score;
   $('score').style.color = score >= 75 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--bad)';
+  if (mock) { $('scoreText').innerHTML = '<b style="color:var(--bad)">SIMULATED EYES (?mock): this score is not real and nothing is saved.</b>'; return; }
   $('scoreText').innerHTML = range ? `With range test. ${rangeAdvice(range).join(' ') || 'Your eyes move well across the screen.'}` : 'Run the range test for a full score.';
 }, 200);
 
@@ -69,7 +70,7 @@ $('range').onclick = async () => {
   out('Range test: look at each dot…');
   range = await runRangeTest();
   const pct = v => (v == null ? '–' : v.toFixed(3));
-  const where = await saveJson('setups', setupRecord(), label());
+  const where = mock ? 'nowhere (simulated eyes are never saved)' : await saveJson('setups', setupRecord(), label());
   out(`Range test done, saved to ${where}\nleft-right eye range ${pct(range.h)} (good ≥ 0.15 without glasses, ≥ 0.10 with)\nup-down eye range ${pct(range.v)} (good ≥ 0.022)\n${rangeAdvice(range).join('\n') || 'Your eyes move well across the screen.'}`);
 };
 
@@ -83,10 +84,12 @@ const label = () => [player(), 'setup', slug(`${tags().distance}-${tags().camera
 // only needed if the description changed after the range test (it saves itself)
 $('save').onclick = async () => {
   if (!range) return out('Run the range test first: the eye range is what the setup score is mostly about.');
+  if (mock) return out('Simulated eyes (?mock) are never saved: open setup.html without ?mock.');
   out(`Setup saved again to ${await saveJson('setups', setupRecord(), label())}`);
 };
 
 $('run').onclick = async () => {
+  if (mock) return out('Simulated eyes (?mock): open setup.html without ?mock for a real test run.');
   const setup = setupRecord(), rec = createRecorder(eyes, { label: label(), player: player(), condition: 'setup', version: VERSIONS.app, setup });
   out('Calibrating…');
   const cal = await eyes.startCalibration();
@@ -98,5 +101,5 @@ $('run').onclick = async () => {
   out(`Test run saved to ${where}\ncalibration ${cal.score}/100\nlane jumps on target ${pct(p?.jumps?.onTarget)} · band switches on target ${pct(p?.switch?.onTarget)} · path in the right lane ${pct(p?.path?.lane)}`);
 };
 
-try { await eyes.init(); out(mock ? 'Simulated eyes (?mock): the mouse moves them.' : 'Camera on.'); }
+try { await eyes.init(); out(mock ? 'SIMULATED EYES (?mock): for trying the page only. Scores are not real and nothing is saved.' : `Camera on. Tests save into this project on ${location.host}.`); }
 catch (e) { out(`Could not start: ${e.message}`); }

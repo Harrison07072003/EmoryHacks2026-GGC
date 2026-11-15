@@ -19,6 +19,8 @@ export const SETUP = {
   pitch: 0.15, yaw: 0.25,                               // head tilt / turn (radians)
   light: { bad: 45, good: 60 },                         // eye brightness 0-255
   eyePx: { bad: 35, good: 50 },                         // eye width in camera pixels
+  glare: { ok: 0.01, bad: 0.03 },                       // blown-out share of the worse eye (glasses reflections)
+  pupil: { bad: 0.12, good: 0.18 },                     // pupil contrast of the better eye (our clips: 0.15-0.22)
   hRange: { bad: 0.06, good: 0.15 },                    // left-right eye range per 3/4 of the screen
   vRange: { bad: 0.004, good: 0.022 },                  // top-bottom eye range per 1/2 of the screen
 };
@@ -41,6 +43,8 @@ export function measureSetup(frame, landmarks = null, video = null) {
     faceWidth: b.w, faceX: b.x + b.w / 2, faceY: b.y + b.h / 2,
     yaw: frame.head[0], pitch: frame.head[1],
     light: (frame.eyes.R.lum + frame.eyes.L.lum) / 2,
+    glare: Math.max(frame.eyes.R.glare, frame.eyes.L.glare),
+    pupil: Math.max(frame.eyes.R.conf, frame.eyes.L.conf),
     eyePx, resolution: video ? `${video.width}x${video.height}` : null,
   };
 }
@@ -68,6 +72,11 @@ export function setupChecks(g, S = SETUP) {
         : turned ? 'Face the screen straight on.' : '');
   add('light', 'Light on face', `${Math.round(g.light)} / 255`, g.light < S.light.bad ? 'bad' : g.light < S.light.good ? 'ok' : 'good',
     g.light < S.light.good ? 'Add light in front of you (not behind).' : '');
+  add('glare', 'Glare on glasses', `${(g.glare * 100).toFixed(1)}% of the eye blown out`,
+    g.glare > S.glare.bad ? 'bad' : g.glare > S.glare.ok ? 'ok' : 'good',
+    g.glare > S.glare.ok ? 'Reflections on your glasses: turn the screen brightness down, add room light so the screen is not the main light, or tilt your glasses / the screen a little.' : '');
+  add('pupil', 'Pupil contrast', `${Math.round(g.pupil * 100)}`, g.pupil < S.pupil.bad ? 'bad' : g.pupil < S.pupil.good ? 'ok' : 'good',
+    g.pupil < S.pupil.good ? 'Your pupils are hard to see: more light on your face, less glare.' : '');
   if (g.eyePx !== null) add('eyesize', 'Eye size in the image', `${Math.round(g.eyePx)} px wide`,
     g.eyePx < S.eyePx.bad ? 'bad' : g.eyePx < S.eyePx.good ? 'ok' : 'good',
     g.eyePx < S.eyePx.good ? 'Your eyes are small in the image: sit closer.' : '');
