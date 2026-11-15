@@ -50,8 +50,17 @@ MediaPipe's iris (cyan), and a 4 x 2 mini lane map with the gaze dot.
 - On the mock (`?input=sim`) there is no image or mesh; it draws a stylised face from the
   face box, so the screen still works in development.
 
+The label on the face is **CONDITIONS %**: how good light, glare, eye contrast, framing and
+head position are right now, naming the weakest when it drags the score down. It is not
+`state.quality` (that one also includes the calibration score and is capped at 40 before
+calibrating). Calibration and tracking quality are shown under the mini lane map.
+
+`image: 'processed'` shows what the tracker actually analyses: the auto-exposed image,
+cropped by the face-following zoom (the debug page uses it; press P to toggle raw).
+
 Raw data for drawing your own version: `eyes.faceData()` →
-`{ frame, video, landmarks, mesh, eyeImages, eyeMarks }` (null fields on the mock).
+`{ frame, video, landmarks, mesh, eyeImages, eyeMarks, processed, roi, tone, conditions }`
+(null fields on the mock).
 
 ## 3. Position checks tuned on real recordings
 

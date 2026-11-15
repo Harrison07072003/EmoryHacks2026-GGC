@@ -14,12 +14,14 @@ const C = { ok: '#39ffb0', info: '#4de1ff', warn: '#ffd34d', bad: '#ff4d6d', dim
  * @param canvas   the <canvas> to draw into. Its pixel size follows its CSS size every frame, so give
  *                 it a definite CSS size (e.g. position:absolute; inset:0 inside a sized box)
  * @param options  video   draw the camera image (default true; false if your page shows the <video> behind)
+ *                 image   'raw' camera (default) or 'processed': what the tracker analyses, after
+ *                         auto-exposure and the face-following crop (shows the auto-adjust working)
  *                 mesh    'full' (whole mesh), 'contours' (default), or false
  *                 eyes    eye close-ups (default true)    checks  checklist (default false)
  *                 lanes   mini lane map (default true)    auto    redraw every frame by itself (default true)
  */
 export function createFaceView(eyes, canvas, options = {}) {
-  const opt = { video: true, mesh: 'contours', eyes: true, checks: false, lanes: true, auto: true, ...options };
+  const opt = { video: true, image: 'raw', mesh: 'contours', eyes: true, checks: false, lanes: true, auto: true, ...options };
   const g = canvas.getContext('2d');
   let raf = 0, dead = false;
 
@@ -28,16 +30,19 @@ export function createFaceView(eyes, canvas, options = {}) {
     const H = (canvas.height = Math.max(1, canvas.clientHeight * devicePixelRatio));
     const s = devicePixelRatio, data = eyes.faceData(), fr = data.frame;
     const checks = positionChecks(fr), ok = positionOk(checks);
-    const vw = data.video?.videoWidth || 16, vh = data.video?.videoHeight || 9;
+    const processed = opt.image === 'processed' && data.processed && data.roi;
+    const src = processed ? data.processed : data.video, roi = processed ? data.roi : { x: 0, y: 0, w: 1, h: 1 };
+    const vw = (processed ? src.width : src?.videoWidth) || 16, vh = (processed ? src.height : src?.videoHeight) || 9;
     const fit = contain(W, H, vw / vh);
-    // camera coordinates (0-1) -> canvas pixels, mirrored like a selfie
-    const P = (x, y) => [fit.x + (1 - x) * fit.w, fit.y + y * fit.h];
+    // camera coordinates (0-1 of the full frame) -> canvas pixels, through the crop, mirrored like a selfie
+    const P = (x, y) => [fit.x + (1 - (x - roi.x) / roi.w) * fit.w, fit.y + ((y - roi.y) / roi.h) * fit.h];
 
     g.clearRect(0, 0, W, H);
     g.fillStyle = '#07070d'; g.fillRect(fit.x, fit.y, fit.w, fit.h);
-    if (opt.video && data.video?.videoWidth) {
+    if (opt.video && (processed || data.video?.videoWidth)) {
       g.save(); g.translate(fit.x + fit.w, fit.y); g.scale(-1, 1);
-      g.globalAlpha = 0.85; g.drawImage(data.video, 0, 0, fit.w, fit.h); g.restore();
+      g.globalAlpha = 0.85; g.drawImage(src, 0, 0, fit.w, fit.h); g.restore();
+      if (processed) label(g, autoLabel(data), fit.x + 12 * s, fit.y + 22 * s, 11 * s, C.text);
     } else if (!data.video) label(g, 'SIMULATED EYES: no camera image', fit.x + 12 * s, fit.y + 22 * s, 12 * s, C.dim);
 
     // oval guide where the face should sit
@@ -47,7 +52,7 @@ export function createFaceView(eyes, canvas, options = {}) {
     if (fr?.face) {
       if (data.landmarks && data.mesh && opt.mesh) drawMesh(g, data, P, s, opt.mesh);
       else stylisedFace(g, fr, P, s);
-      drawBox(g, fr, P, s, ok, eyes.state.quality);
+      drawBox(g, fr, P, s, ok, data.conditions, eyes.state.calibrationScore);
       if (data.landmarks) drawHeadDirection(g, fr, data.landmarks, P, s);
     } else label(g, 'NO FACE', fit.x + fit.w / 2, fit.y + fit.h / 2, 28 * s, C.bad, 'center');
 
@@ -94,8 +99,14 @@ function stylisedFace(g, fr, P, s) {
   for (const ex of [0.32, 0.68]) { g.beginPath(); g.ellipse(x0 + w * ex, y0 + h * 0.42, w * 0.1, h * 0.04, 0, 0, 7); g.stroke(); }
 }
 
-/** HUD-style corner brackets around the face with the live quality score. */
-function drawBox(g, fr, P, s, ok, quality) {
+const FACTOR_NAMES = { light: 'light', glare: 'glare', pupil: 'eye contrast', framing: 'framing', head: 'head moved' };
+
+/**
+ * HUD corners around the face. The label is the CONDITIONS score (light, glare, eye
+ * contrast, framing, head position right now; the weakest one is named when it drags the
+ * score down). Calibration accuracy is separate: it is shown on the lane map.
+ */
+function drawBox(g, fr, P, s, ok, conditions, calibrationScore) {
   const b = fr.box, [x0, y0] = P(b.x + b.w, b.y), [x1, y1] = P(b.x, b.y + b.h), k = Math.min(x1 - x0, y1 - y0) * 0.18;
   g.strokeStyle = ok ? C.ok : C.info; g.lineWidth = 2 * s;
   g.beginPath();
@@ -103,10 +114,19 @@ function drawBox(g, fr, P, s, ok, quality) {
     g.moveTo(x, y + dy * k); g.lineTo(x, y); g.lineTo(x + dx * k, y);
   }
   g.stroke();
-  const col = quality >= 70 ? C.ok : quality >= 40 ? C.warn : C.bad;
-  label(g, `TRACKING ${quality}`, x0, y0 - 8 * s, 12 * s, col);
+  const pct = Math.round((conditions?.score ?? 0) * 100), col = pct >= 75 ? C.ok : pct >= 45 ? C.warn : C.bad;
+  const worst = Object.entries(conditions?.factors ?? {}).sort((a, b) => a[1] - b[1])[0];
+  const why = pct < 75 && worst && worst[1] < 0.9 ? ` · ${FACTOR_NAMES[worst[0]] ?? worst[0]}` : '';
+  label(g, `CONDITIONS ${pct}%${why}`, x0, y0 - 8 * s, 12 * s, col);
   g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(x0, y1 + 6 * s, x1 - x0, 4 * s);
-  g.fillStyle = col; g.fillRect(x0, y1 + 6 * s, ((x1 - x0) * quality) / 100, 4 * s);
+  g.fillStyle = col; g.fillRect(x0, y1 + 6 * s, ((x1 - x0) * pct) / 100, 4 * s);
+}
+
+/** What the auto-adjust is doing right now, for the processed view. */
+function autoLabel({ roi, tone }) {
+  const zoom = roi ? `crop ${Math.round(roi.w * 100)}%` : '';
+  const exp = tone ? `exposure: gamma ${tone.gamma.toFixed(2)} contrast ${tone.contrast.toFixed(2)}` : 'exposure: manual';
+  return `PROCESSED (what the tracker sees) · ${exp} · ${zoom}`;
 }
 
 /** Arrow from the nose in the direction the head points. */
@@ -150,7 +170,7 @@ function drawLaneMap(g, eyes, fit, s) {
   if (st.calibrationScore !== null) {
     g.fillStyle = C.warn; g.beginPath(); g.arc(x + st.gaze.x * w, y + st.gaze.y * h, 4 * s, 0, 7); g.fill();
   }
-  label(g, st.calibrationScore === null ? 'GAZE: calibrate first' : `GAZE · calibration ${st.calibrationScore}`, x, y + h + 13 * s, 10 * s, C.text);
+  label(g, st.calibrationScore === null ? 'GAZE: not calibrated yet' : `GAZE · calibration ${st.calibrationScore}/100 · tracking ${st.quality}`, x, y + h + 13 * s, 10 * s, C.text);
 }
 
 function drawChecks(g, checks, fit, s) {

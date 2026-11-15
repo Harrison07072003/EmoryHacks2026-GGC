@@ -37,12 +37,13 @@ function headDrift(head, ref) {
 }
 
 export class QualityTracker {
-  constructor({ smoothing = 0.15 } = {}) { this.smoothing = smoothing; this.value = 0; this.factors = {}; this.ema = null; }
+  constructor({ smoothing = 0.15 } = {}) { this.smoothing = smoothing; this.value = 0; this.factors = {}; this.live = 0; this.ema = null; }
   /** @returns the new integer score when it changed, else null */
   update(frame, { calibrationScore = null, headRef = null } = {}) {
     const q = liveQuality(frame, headRef);
     if (!q) return null;
     this.factors = q.factors;
+    this.live = q.live;
     const target = q.live * (calibrationScore ?? UNCALIBRATED);
     // drop fast on a lost face, otherwise ease so the number does not flicker
     this.ema = this.ema === null || !frame.face ? target : this.ema + this.smoothing * (target - this.ema);

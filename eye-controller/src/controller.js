@@ -162,13 +162,18 @@ export function buildController(source, options = {}) {
      * Everything needed to draw the player's face: the latest frame (face box, head pose, eye
      * measurements), and on the live camera also the <video>, the 478 face landmarks (0-1 of
      * the camera frame), MediaPipe's mesh lines, the eye close-up images and where our pupil
-     * finder and MediaPipe's iris landed in them. Fields the source lacks are null (mock).
+     * finder and MediaPipe's iris landed in them, the auto-adjusted image the tracker analyses,
+     * and the live conditions score. Fields the source lacks are null (mock).
      */
     faceData() {
       const cam = source.debug ? source : null;
       return {
         frame: engine.lastFrame, video: cam?.video ?? null, landmarks: cam?.landmarks ?? null, mesh: cam?.mesh ?? null,
         eyeImages: cam?.eyeCanvas ?? null, eyeMarks: cam ? { L: cam.debug.L, R: cam.debug.R } : null,
+        // the image the tracker actually analyses: auto-exposed and cropped to `roi` (0-1 of the camera frame)
+        processed: cam?.work ?? null, roi: cam?.workRoi ?? null, tone: cam?.settings.auto ? cam.tone : null,
+        // how good the conditions are right now (light, glare, pupil contrast, framing, head), 0-1
+        conditions: { score: engine.quality.live, factors: engine.quality.factors },
       };
     },
     /** Full result of every calibration: { score, ok, weakCells, points }. */

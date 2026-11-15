@@ -89,6 +89,7 @@ export class CameraSource {
     const t = performance.now(), roi = this.roi;
 
     this.drawWorkFrame(vw, vh, roi);
+    this.workRoi = roi; // the crop the processed image shows (this.roi moves on for the next frame)
     const result = this.landmarker.detectForVideo(this.work, t);
     const raw = result.faceLandmarks[0];
     if (!raw) {

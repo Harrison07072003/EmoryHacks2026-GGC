@@ -135,7 +135,13 @@ const note = m => { message = m; };
 
 // ---- live view ----
 // camera view with the full face mesh, eye close-ups, head direction and lane map
-const faceView = createFaceView(eyes, $('frame'), { mesh: 'full', checks: true });
+let faceView = createFaceView(eyes, $('frame'), { mesh: 'full', checks: true, image: 'processed' });
+// P toggles between what the tracker analyses (auto-exposed, cropped) and the raw camera
+addEventListener('keydown', e => {
+  if (e.key !== 'p' || e.target instanceof HTMLInputElement) return;
+  const image = faceView.image === 'raw' ? 'processed' : 'raw';
+  faceView.destroy(); faceView = createFaceView(eyes, $('frame'), { mesh: 'full', checks: true, image }); faceView.image = image;
+});
 function drawEye(canvas, key) {
   const g = canvas.getContext('2d'), d = cam.debug[key];
   if (!d || !cam.eyeCanvas) return;
