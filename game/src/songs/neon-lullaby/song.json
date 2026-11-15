@@ -1,0 +1,25 @@
+{
+  "id": "neon-lullaby",
+  "title": "Neon Lullaby",
+  "subtitle": "Slow cyber ballad",
+  "artist": "RhythmEyez team (original composition)",
+  "bpm": 84,
+  "durationSec": 35.79,
+  "previewStart": 5.7,
+  "previewSec": 8,
+  "audio": "audio.wav",
+  "palette": {
+    "bg1": "#0b0820",
+    "bg2": "#1c1340",
+    "lane": "#8fb8ff",
+    "accent": "#c7a6ff",
+    "straight": "#9be7ff",
+    "curve": "#d9a6ff",
+    "glow": "#b48cff"
+  },
+  "license": {
+    "name": "Original work of the RhythmEyez team",
+    "notes": "Composed and synthesized from code in tools/compose/ (no samples, no third-party audio). Free to use and redistribute with this project.",
+    "source": "tools/compose/songs/neon-lullaby.mjs"
+  }
+}

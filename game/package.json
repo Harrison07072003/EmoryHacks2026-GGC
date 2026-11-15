@@ -1,0 +1,25 @@
+{
+  "name": "rhythmeyez",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "songs": "node tools/compose/build-songs.mjs",
+    "check-charts": "node tools/check-charts.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

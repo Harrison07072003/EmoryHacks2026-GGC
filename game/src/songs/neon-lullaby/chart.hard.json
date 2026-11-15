@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "song": "neon-lullaby",
+  "difficulty": "hard",
+  "generatedBy": "tools/compose (offline, from the composed note data)",
+  "notes": [
+    {"type":"straight","t":2.143,"lane":3},
+    {"type":"straight","t":2.857,"lane":2},
+    {"type":"straight","t":3.571,"lane":2},
+    {"type":"straight","t":4.286,"lane":1},
+    {"type":"straight","t":5,"lane":0},
+    {"type":"curve","t":5.714,"end":16.429,"path":[{"t":5.714,"x":0.437},{"t":6.786,"x":0.563},{"t":7.143,"x":0.69},{"t":8.571,"x":0.563},{"t":9.286,"x":0.373},{"t":10,"x":0.12},{"t":11.429,"x":0.247},{"t":12.5,"x":0.437},{"t":12.857,"x":0.69},{"t":13.571,"x":0.88},{"t":14.286,"x":0.753},{"t":15.714,"x":0.69},{"t":16.429,"x":0.69}]},
+    {"type":"straight","t":17.143,"lane":2},
+    {"type":"straight","t":17.5,"lane":2},
+    {"type":"straight","t":17.857,"lane":1},
+    {"type":"straight","t":18.571,"lane":2},
+    {"type":"straight","t":19.286,"lane":0},
+    {"type":"straight","t":19.643,"lane":1},
+    {"type":"straight","t":20,"lane":1},
+    {"type":"straight","t":20.714,"lane":2},
+    {"type":"straight","t":21.071,"lane":3},
+    {"type":"straight","t":21.429,"lane":2},
+    {"type":"straight","t":22.143,"lane":2},
+    {"type":"curve","t":22.857,"end":31.429,"path":[{"t":22.857,"x":0.88},{"t":23.571,"x":0.753},{"t":24.286,"x":0.627},{"t":25.357,"x":0.563},{"t":25.714,"x":0.437},{"t":26.429,"x":0.563},{"t":27.143,"x":0.753},{"t":28.571,"x":0.563},{"t":29.286,"x":0.31},{"t":30,"x":0.12},{"t":31.429,"x":0.12}]}
+  ]
+}
