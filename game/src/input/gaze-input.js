@@ -95,6 +95,8 @@ export function createGazeInput(source = 'live', { mouseMode = () => MOUSE.defau
     get calibrationOk() { return driver === 'mouse' ? true : eyes.state.ready; },
     get faceVisible() { return driver === 'mouse' ? true : eyes.state.faceVisible; },
     get quality() { return driver === 'mouse' ? 100 : eyes.state.quality; },
+    /** 1 = head where it was at calibration, down to 0.5 = turned / moved far (engine's head factor). */
+    get headSteadiness() { return driver === 'mouse' ? 1 : eyes.faceData().conditions.factors.head ?? 1; },
 
     /** The tracker's reported lane / band (null while the mouse drives): for tracking stats. */
     get cell() { return driver === 'eyes' && eyes ? { lane: eyes.state.lane, band: eyes.state.band } : null; },

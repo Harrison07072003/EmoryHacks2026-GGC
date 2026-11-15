@@ -1,5 +1,5 @@
 // The play screen: song clock, judging, scoring, effects, character, pause/quit.
-// When tracking drifts (live quality stays low) the song pauses and goes straight into a quick
+// When tracking drifts (the head stays away from its calibration pose) the song pauses and goes straight into a quick
 // recalibration after a 3 s notice (cancel = resume); it runs on top of the song and resumes it.
 // When the face is gone the song pauses; the pause menu also offers Quick recalibrate.
 //
@@ -139,7 +139,7 @@ export default function play(root, app) {
     let left = DRIFT.noticeSec, timer = 0;
     const notice = popup({
       title: 'Tracking drifted',
-      text: `Recalibrating in <b data-left>${left}</b>… (you may have moved, or the light changed)`,
+      text: `Recalibrating in <b data-left>${left}</b>… (your head moved away from where it was when you calibrated)`,
       buttons: [{ label: 'Cancel', cls: 'purple', onPress: () => { clearInterval(timer); resume(); } }],
     });
     timer = setInterval(() => {
@@ -238,8 +238,8 @@ export default function play(root, app) {
         faceLostSince = null;
         pause('Your face left the camera view. Sit back in front of the camera, then look at Resume.');
       }
-      // tracking drifted (head moved, light changed): straight into a quick recalibration
-      driftSince = state === 'playing' && tracking && gaze.faceVisible && gaze.quality < DRIFT.qualityBelow ? (driftSince ?? now) : null;
+      // tracking drifted (head moved away from the calibration pose): straight into a quick recalibration
+      driftSince = state === 'playing' && tracking && gaze.faceVisible && gaze.headSteadiness < DRIFT.headBelow ? (driftSince ?? now) : null;
       if (driftSince !== null && now - driftSince > DRIFT.sustainSec * 1000) { driftSince = null; driftRecalibrate(); }
       if (state === 'playing') {
         const jt = t - latency();

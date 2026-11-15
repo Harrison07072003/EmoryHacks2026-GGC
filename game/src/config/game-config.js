@@ -128,9 +128,14 @@ export const MOUSE = {
   offerAfterFailures: 2,     // failed calibrations in a row before the game offers to play with the mouse
 };
 
-/** Tracking drifted during a song (head moved, light changed): pause and recalibrate. */
+/**
+ * Tracking drifted during a song: the head moved away from where it was at calibration.
+ * Not the overall quality number: that also falls with glare, pupil contrast and a modest
+ * calibration score (a 63 calibration sat below 30 for 75% of a recorded song with nothing wrong).
+ */
 export const DRIFT = {
-  qualityBelow: 30,       // the engine's live tracking quality (0-100)
+  headBelow: 0.8,         // the engine's head factor (1 = same pose as at calibration, 0.5 = far off);
+                          // 0.8 is about a 15 degree turn or a fifth of the camera view sideways
   sustainSec: 2.5,        // ...for this long
   noticeSec: 3,           // "Recalibrating in 3…" (with Cancel) before the quick recalibration starts
 };

@@ -72,8 +72,8 @@ pause or goes back.
   your current calibration).
 - **Pause:** the Pause button (top right) freezes the song: Resume / Quick recalibrate /
   Songs / Home. Quit asks before leaving. The song pauses by itself if your face is out of
-  view for 3 s. If tracking drifts (live quality below 30 for 2.5 s: you moved, the light
-  changed) it pauses and, after "Recalibrating in 3…" (Cancel = resume), runs a quick
+  view for 3 s. If tracking drifts (your head stays well away from where it was at calibration
+  for 2.5 s) it pauses and, after "Recalibrating in 3…" (Cancel = resume), runs a quick
   recalibration on top of the song, then the song carries on. Resume rewinds 1 s and counts in.
 - **Mouse:** off by default. Settings → Mouse → *Allowed*: your eyes play, and the mouse steps
   in only while you move it or your face is lost. If calibration fails twice in a row, the

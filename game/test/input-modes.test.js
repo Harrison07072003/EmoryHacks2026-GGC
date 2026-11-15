@@ -30,6 +30,16 @@ describe('mouse modes', () => {
   });
 });
 
+describe('drift signal', () => {
+  it('head steadiness is 1 before calibration and while the mouse drives', () => {
+    const gaze = createGazeInput('sim');
+    gaze.update();
+    expect(gaze.headSteadiness).toBe(1);
+    gaze.enableEmergencyMouse(); gaze.update();
+    expect(gaze.headSteadiness).toBe(1);
+  });
+});
+
 describe('in-game tracking measure', () => {
   const straight = { id: 's1', type: 'straight', lane: 2 }, curve = { id: 'c1', type: 'curve' };
   const g = { x: 0.6, y: 0.3, valid: true };
