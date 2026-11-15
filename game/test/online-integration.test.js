@@ -13,6 +13,9 @@ const RUN = !!process.env.ONLINE_IT;
 const COLLECTION = `songs_it_${Date.now()}`;
 
 describe.skipIf(!RUN)('online pipeline (live)', async () => {
+  // Vitest still runs a skipped suite's body to collect it: without Typesense set up, the
+  // setup below would throw and fail `npm test`, so stop here.
+  if (!RUN) return;
   const { loadEnv } = await import('../tools/env.mjs');
   const { createPoliteFetch } = await import('../src/services/archive/http.js');
   const { createArchiveClient } = await import('../src/services/archive/ia-client.js');
