@@ -54,7 +54,12 @@ export class SyntheticSource {
   }
 
   /** Make the fake player look at a point (after a human-like reaction delay). null = back to `drive`. */
-  lookAt(target) { this.attention = target ? { target, at: this.t + SACCADE_LATENCY_MS } : null; }
+  lookAt(target) {
+    if (!target) { this.attention = null; return; }
+    // a target that only moved a little is the same (moving) target: follow it, keep the delay
+    if (this.attention && Math.hypot(target.x - this.attention.target.x, target.y - this.attention.target.y) < 0.05) this.attention.target = target;
+    else this.attention = { target, at: this.t + SACCADE_LATENCY_MS };
+  }
 
   setConditions(cond) { Object.assign(this.conditions, cond); }
 

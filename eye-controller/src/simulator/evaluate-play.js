@@ -7,7 +7,7 @@
 import { Engine } from '../core/engine.js';
 import { fitCalibration } from '../calibration/fit.js';
 import { cellOf, DEFAULT_LAYOUT, laneOf, bandOf } from '../signals/lanes.js';
-import { labelledPoints } from './evaluate.js';
+import { labelledPoints, pursuitPoint } from './evaluate.js';
 import { PHASES } from '../testrun/script.js';
 import { mean, median } from '../util/math.js';
 
@@ -16,8 +16,8 @@ const MAX_LAG_MS = 500;
 
 /** Calibration for replay: the clip's own dots, or the one stored when recording started. */
 export function clipCalibration(recording, layout = DEFAULT_LAYOUT) {
-  const points = labelledPoints(recording);
-  const source = points.length >= 6 ? points : recording.meta?.calibrationPoints ?? [];
+  const points = labelledPoints(recording), pursuit = pursuitPoint(recording);
+  const source = points.length >= 6 ? (pursuit ? [...points, pursuit] : points) : recording.meta?.calibrationPoints ?? [];
   return source.length ? fitCalibration(source, { layout }) : null;
 }
 

@@ -38,10 +38,11 @@ npm --prefix eye-controller run fetch-model
 - Set up the room for the condition selected in the checklist (click it to read what to do).
 - Sit how you would to play. Don't move your head unless the condition says so.
 
-## 3. Record a clip (about 75 seconds)
+## 3. Record a clip (about 90 seconds)
 
 1. Press **Record clip** (or Enter).
-2. **Calibration:** look at each dot until its ring fills (16 dots).
+2. **Calibration:** look at each dot until its ring fills (16 dots), then **follow the moving
+   dot** with your eyes for about 11 seconds (it says "Follow the dot with your eyes").
 3. **Countdown**, then the test run:
    - **Jumps:** a note lights up in the top half. Look at its centre dot until the next one.
    - **Path:** a dot glides along the bottom half. Follow it with your eyes.
@@ -53,35 +54,32 @@ nothing is saved. Then record it again.
 
 ## 4. Your task list
 
-Do these in order. The checklist on the page tracks the counts for you.
+Round 1 (version 0.1) is done: baselines and every condition are recorded and scored.
 
-### Now: 5 baseline clips (priority, needed for the vertical fix)
+### Now: round 2 on version 0.2 (measures the vertical fixes)
 
-- [ ] new baseline 1
-- [ ] new baseline 2
-- [ ] new baseline 3
-- [ ] new baseline 4
-- [ ] new baseline 5
+Version 0.2 adds the moving dot to calibration, sharper eye images, and asks the camera for
+1080p. Restart the dev server first (section 1), then check the stats under the camera say
+`camera 1920x1080` (if it shows less, your webcam cannot do 1080p; that is fine, note it).
 
-Same room, same light, same seat, back to back. Normal setup, glasses as you usually wear them.
-Your existing baseline clip was recorded before the new up/down data existed, so it does not
-count toward these five: the page counter will read 6/5 when you are done, which is correct.
+In the **note** box type `v2` for every clip this round, so the files are easy to tell apart.
 
-**Then tell Claude:** "baselines are in". That unlocks the vertical fix.
+- [ ] baseline × 5 (glasses on, normal setup, back to back)
+- [ ] noglasses × 2
+- [ ] drift5 × 2: right after a baseline that scored 60+, use the computer normally for
+      5 minutes, then select drift5 and press Record clip. The page now refuses if the
+      current calibration did not pass.
 
-### Next: the conditions (when you have time, any order)
+Then run the scoring (section 5) and tell Claude: "round 2 is in".
 
-| Condition | Clips | What to do |
-|---|---|---|
-| bright | 2 | strong light in front of you |
-| dim | 2 | room lights low or off |
-| backlit | 2 | window or lamp behind you |
-| busy | 2 | people moving behind you |
-| noglasses | 2 | glasses off |
-| close | 2 | face about 40 cm from the screen |
-| far | 2 | lean back, about 80 cm |
-| headmove | 2 | move your head naturally during the test run |
-| drift5 | 2 | record a baseline, use the computer normally 5 min, then record this (it skips calibration) |
+Rest your eyes between clips: look at something far away for 20 seconds every 3-4 clips.
+Tired or watering eyes make the data worse.
+
+### Later (only if round 2 looks good)
+
+Re-record the conditions that matter for real play: bright, backlit, close, far, headmove.
+Skip `dim` (a completely dark room cannot work with a webcam; the game should ask for some
+light) and `busy` (the poster face did not affect tracking).
 
 ## 5. After a batch: score everything
 

@@ -1,6 +1,6 @@
 // Tracker debug page: live camera view, eye crops with pupil / iris markers, the camera
 // adjust sliders, calibration, session recording, and baseline export / import.
-import { createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
+import { VERSIONS, createEyeController, createRecorder, evaluatePlay, evaluateRecording, runTestRun, saveJson, saveRecording } from '../src/index.js';
 import { PROTOCOL } from './protocol.js';
 import { slug } from '../src/util/slug.js';
 
@@ -54,6 +54,8 @@ const pct = v => (Number.isFinite(v) ? `${Math.round(v * 100)}%` : '-');
 let saved = [], busy = false, recorder = null;
 const selected = () => PROTOCOL.find(p => p.id === document.querySelector('input[name=cond]:checked')?.value) ?? PROTOCOL[0];
 const clipLabel = () => [player(), selected().id, slug($('label').value)].filter(Boolean).join('-');
+// record which tracker version made each clip, so before/after comparisons are easy
+const version = () => VERSIONS.app;
 const countOf = cond => saved.filter(f => f.startsWith(`${player()}-${cond.id}_`) || f.startsWith(`${player()}-${cond.id}-`)).length;
 
 async function refreshChecklist(keep = true) {
@@ -79,9 +81,10 @@ function describe(recording) {
 
 async function recordClip({ calibrate = selected().calibrate !== false } = {}) {
   if (busy) return;
-  if (!calibrate && !eyes.debug.engine.calibration) return note('this step needs an existing calibration: record a baseline clip first');
+  // a drift check is only meaningful on a calibration that passed
+  if (!calibrate && !eyes.state.ready) return note(`this step needs a calibration that passed (60+): record a baseline clip first${eyes.state.calibrationScore === null ? '' : `. The current one scored ${eyes.state.calibrationScore}`}`);
   busy = true; $('result').textContent = '';
-  const label = clipLabel(), rec = createRecorder(eyes, { label, player: player(), condition: selected().id, settings: { ...cam.settings } });
+  const label = clipLabel(), rec = createRecorder(eyes, { label, player: player(), condition: selected().id, version: version(), settings: { ...cam.settings } });
   try {
     if (calibrate) {
       const cal = await eyes.startCalibration();
@@ -135,9 +138,10 @@ const frame = $('frame'), fg = frame.getContext('2d');
 function drawEye(canvas, key) {
   const g = canvas.getContext('2d'), d = cam.debug[key];
   if (!d || !cam.eyeCanvas) return;
+  const w = canvas.width = cam.eyeCanvas[key].width, h = canvas.height = cam.eyeCanvas[key].height;
   g.drawImage(cam.eyeCanvas[key], 0, 0);
-  g.fillStyle = '#ff3b3b'; g.fillRect(d.pupil.u * 64 - 1, d.pupil.v * 32 - 1, 2, 2);        // red: our pupil finder
-  g.strokeStyle = '#4de1ff'; g.strokeRect(d.iris.u * 64 - 2, d.iris.v * 32 - 2, 4, 4);       // blue: MediaPipe iris
+  g.fillStyle = '#ff3b3b'; g.fillRect(d.pupil.u * w - 2, d.pupil.v * h - 2, 4, 4);          // red: our pupil finder
+  g.strokeStyle = '#4de1ff'; g.lineWidth = 2; g.strokeRect(d.iris.u * w - 4, d.iris.v * h - 4, 8, 8); // blue: MediaPipe iris
 }
 function draw() {
   const s = eyes.state, f = eyes.debug.engine.lastFrame;
@@ -155,6 +159,7 @@ function draw() {
     `left eye: ${eye('L')}    right eye: ${eye('R')}`,
     e ? `exposure: mean ${e.mean.toFixed(0)}  p5 ${e.p5}  p95 ${e.p95}  dark ${(e.dark * 100).toFixed(0)}%  clipped ${(e.clipped * 100).toFixed(0)}%` : '',
     cam.tone && cam.settings.auto ? `auto tone: gamma ${cam.tone.gamma.toFixed(2)}  contrast ${cam.tone.contrast.toFixed(2)}  brightness ${cam.tone.brightness.toFixed(2)}` : '',
+    f?.res ? `camera ${f.res[0]}x${f.res[1]}   frame time ${f.ms?.toFixed(1) ?? '-'} ms` : '',
     `crop: x ${cam.roi.x.toFixed(2)} y ${cam.roi.y.toFixed(2)} size ${cam.roi.w.toFixed(2)}`,
     lastResult ? `last calibration: ${lastResult.score}/100 ${lastResult.ok ? 'OK' : 'TOO LOW'}  weak cells: ${lastResult.weakCells.map(c => `${c.band} ${c.lane}`).join(', ') || 'none'}` : '',
     recorder ? `recording: ${recorder.length} frames` : '',

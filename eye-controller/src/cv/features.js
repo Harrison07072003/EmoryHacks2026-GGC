@@ -37,8 +37,13 @@ export const EYE_IDS = {
 };
 const FACE_IDS = { nose: 1, left: 234, right: 454, top: 10, chin: 152 };
 
-/** Eye crop handed to the pupil finder: CROP.w x CROP.h pixels covering `span` eye-widths. */
-export const CROP = { w: 64, h: 32, span: 1.4 };
+/**
+ * Eye crop handed to the pupil finder: CROP.w x CROP.h pixels covering `span` eye-widths.
+ * 128 px is about the eye's native size in a 1080p frame. At 64 px the eye was shrunk to
+ * half resolution, and looking from the top band to the bottom moved the pupil ~1 pixel.
+ * Only the precision changes with the size, not the meaning of the features.
+ */
+export const CROP = { w: 128, h: 64, span: 1.4 };
 
 /**
  * Geometry of one eye from landmarks (normalized to the full video frame).

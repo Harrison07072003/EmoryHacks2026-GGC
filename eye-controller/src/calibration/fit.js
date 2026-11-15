@@ -13,7 +13,7 @@ const OUTLIER_FACTOR = 3;
 
 export function pointGram(point) {
   const g = createGram(FEATURE_COUNT);
-  for (const f of point.samples) addSample(g, f, point.target.x, point.target.y);
+  point.samples.forEach((f, i) => { const t = point.targets?.[i] ?? point.target; addSample(g, f, t.x, t.y); });
   return g;
 }
 
@@ -35,6 +35,8 @@ export function scalePrior(baselineGram, pseudoSamples) {
  */
 export function fitCalibration(points, { prior = null, priorSamples = 30, headPenalty = 6, layout = DEFAULT_LAYOUT, dropBelow = 45, maxDropFrac = 0.25 } = {}) {
   const scaledPrior = scalePrior(prior, priorSamples);
+  // a pursuit point (moving dot) always counts toward the fit but is never scored or dropped
+  const moving = points.map(p => p.kind === 'pursuit');
   const usable = points.map(p => p.samples.length >= 3);
   const grams = points.map((p, i) => (usable[i] ? pointGram(p) : null));
   let kept = usable.slice();
@@ -48,19 +50,20 @@ export function fitCalibration(points, { prior = null, priorSamples = 30, headPe
     const total = totalOf(), count = kept.filter(Boolean).length;
     return points.map((p, i) => {
       if (!usable[i]) return Infinity;
+      if (moving[i]) return NaN;
       const others = kept[i] ? addGram(cloneGram(total), grams[i], -1) : total;
       if (count - (kept[i] ? 1 : 0) < 3 && !scaledPrior) return Infinity;
       const m = fitGazeModel(others, { headPenalty, only: 'both' });
       return mean(p.samples.map(f => { const g = predictGaze(m, f); return Math.hypot(g.x - p.target.x, g.y - p.target.y); }));
     });
   };
-  const scoresOf = res => points.map((p, i) => (usable[i] ? pointScore(p.steadiness ?? 0, res[i]) : 0));
+  const scoresOf = res => points.map((p, i) => (moving[i] ? null : usable[i] ? pointScore(p.steadiness ?? 0, res[i]) : 0));
 
   // Drop the worst point, rescore, repeat: one bad point also drags its neighbours down,
   // so they must be judged again once it is gone.
   let res = residuals(), scores = scoresOf(res);
   for (let dropped = 0; dropped < Math.floor(points.length * maxDropFrac); dropped++) {
-    const worst = scores.reduce((w, s, i) => (kept[i] && (w < 0 || s < scores[w]) ? i : w), -1);
+    const worst = scores.reduce((w, s, i) => (kept[i] && !moving[i] && (w < 0 || s < scores[w]) ? i : w), -1);
     if (worst < 0 || scores[worst] >= dropBelow) break;
     // only an outlier is dropped: with few points every held-out error is large, and
     // throwing data away then makes things worse
@@ -70,9 +73,9 @@ export function fitCalibration(points, { prior = null, priorSamples = 30, headPe
   }
 
   const scored = points.map((p, i) => ({
-    ...p, residual: res[i], score: scores[i], kept: kept[i], cell: cellOf(p.target, layout),
+    ...p, residual: res[i], score: scores[i], kept: kept[i], cell: moving[i] ? null : cellOf(p.target, layout),
   }));
-  const keptPoints = scored.filter(p => p.kept);
+  const keptPoints = scored.filter(p => p.kept && p.kind !== 'pursuit');
   const weakCells = allCells(layout).filter(cell => {
     const mine = keptPoints.filter(p => sameCell(p.cell, cell));
     return !mine.length || mean(mine.map(p => p.score)) < WEAK_CELL_SCORE;
@@ -86,7 +89,7 @@ export function fitCalibration(points, { prior = null, priorSamples = 30, headPe
   return {
     model: gramWeight(fitGram) > 0 ? fitGazeModel(fitGram, { headPenalty }) : null,
     gram, fitGram,
-    score: enough ? overallScore(scored, uncovered) : 0,
+    score: enough ? overallScore(scored.filter(p => p.kind !== 'pursuit'), uncovered) : 0,
     points: scored,
     weakCells,
     headRef: samples.length ? HEAD_IDX.map(i => mean(samples.map(f => f[i]))) : null,

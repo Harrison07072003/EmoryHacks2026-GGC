@@ -23,7 +23,8 @@ export class CameraSource {
   constructor({ settings, modelUrl, wasmPath, constraints } = {}) {
     this.settings = { ...DEFAULT_CAMERA_SETTINGS, ...settings };
     this.options = { modelUrl, wasmPath };
-    this.constraints = constraints ?? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 }, facingMode: 'user' };
+    // ask for 1080p: more pixels per eye. Cameras that cannot do it fall back to what they can.
+    this.constraints = constraints ?? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, facingMode: 'user' };
     this.follower = new RoiFollower();
     this.roi = { x: 0, y: 0, w: 1, h: 1 };
     this.pupilTrust = { R: 0.5, L: 0.5 };
@@ -117,6 +118,7 @@ export class CameraSource {
       head, box, exposure: this.exposure,
       shapes: Object.fromEntries(EYE_SHAPES.map(k => [k, Math.round((shapes[k] ?? 0) * 1000) / 1000])),
       ms: performance.now() - t, // time spent on this frame: detector + eye crops + pupil finder
+      res: [vw, vh],             // camera resolution actually delivered
     });
   }
 

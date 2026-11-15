@@ -106,6 +106,39 @@ describe('adaptive capture session', () => {
   });
 });
 
+describe('moving-dot (pursuit) phase', () => {
+  it('runs after the dots, labels samples with the delayed target, and is never scored', () => {
+    const eye = createSimEye({ seed: 3, noise: 'ideal' }), ids = [];
+    const session = new CalibrationSession({ targets: defaultTargets().slice(0, 2), pursuitMs: 3000 }).start();
+    let t = 0;
+    for (let i = 0; i < 2000 && !session.done; i++) { ids.push(session.targetId); session.push(eye((t += DT), session.target)); }
+    const p = session.points.at(-1);
+    expect(session.points).toHaveLength(3);
+    expect(p.kind).toBe('pursuit');
+    expect(p.samples.length).toBe(p.targets.length);
+    expect(p.samples.length).toBeGreaterThan(70);
+    expect(ids).toContain('pursuit');
+    const fit = fitCalibration(pointsFor(5).concat(p));
+    expect(fit.points.at(-1)).toMatchObject({ kind: 'pursuit', kept: true, score: null, cell: null });
+    expect(fit.score).toBeGreaterThanOrEqual(80);
+  });
+  // The gain on real clips comes from play looking different from still dots, which the
+  // simulator does not model; here we only check the moving dot is good training data.
+  it('moving-dot samples are accurate training data and do not hurt a dot calibration', () => {
+    const seeds = [31, 32, 33, 34], few = defaultTargets().filter((_, i) => i % 3 === 0);
+    const withPursuit = seed => {
+      const eye = createSimEye({ seed }), session = new CalibrationSession({ targets: [], pursuitMs: 10000 }).start();
+      for (let t = 0; !session.done; t += DT) session.push(eye(t, session.target ?? { x: 0.5, y: 0.5 }));
+      return session.points[0];
+    };
+    const plain = mean(seeds.map(s => testError(fitCalibration(pointsFor(s, few)).model, s)));
+    const moving = mean(seeds.map(s => testError(fitCalibration([...pointsFor(s, few), withPursuit(s)]).model, s)));
+    const movingOnly = mean(seeds.map(s => testError(fitCalibration([withPursuit(s)]).model, s)));
+    expect(moving).toBeLessThan(plain * 1.15);
+    expect(movingOnly).toBeLessThan(0.06);
+  });
+});
+
 describe('fitting and scoring a calibration', () => {
   it('gives a high score and an accurate model on clean data', () => {
     const fit = fitCalibration(pointsFor(5));

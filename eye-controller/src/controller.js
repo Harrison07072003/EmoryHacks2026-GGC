@@ -13,6 +13,8 @@ import { baselineStore, contribute, emptyBaseline, isValidBaseline, mergeBaselin
 import { addGram, createGram, gramFromJSON } from './model/ridge.js';
 import { FEATURE_COUNT } from './cv/features.js';
 
+const DEFAULT_PURSUIT_MS = 10000;
+
 /**
  * @param source   { start(videoEl, onFrame), stop(), lookAt?(target) }
  * @param options  { layout, minScore, storage, headPenalty, smoothing, profileId }
@@ -65,9 +67,11 @@ export function buildController(source, options = {}) {
      * Run a calibration. Resolves with { score, ok, weakCells, points } when it finishes.
      * options: topUp   - only re-capture the weak cells and merge with the existing data
      *          quick   - one dot per cell; only shortens things once a pooled baseline exists
+     *          pursuitMs - length of the moving-dot phase after the dots (default 10 s, 0 = none)
      *          targets - your own [{x, y}] list
      *          area    - element the dots are drawn over (default: the whole page)
-     *          onTarget(target | null, index, total), onProgress(0-1) - draw the dots yourself
+     *          onTarget(target | null, index, total, info), onProgress(0-1) - draw the dots yourself;
+     *                    info.moving is true during the moving-dot phase (called every frame)
      */
     startCalibration(opts = {}) {
       if (!running) return Promise.reject(new Error('Eye tracking is not running: await init() first'));
@@ -76,14 +80,16 @@ export function buildController(source, options = {}) {
       const weak = engine.calibration?.weakCells ?? [];
       const topUp = !!opts.topUp && previous.length > 0 && weak.length > 0;
       const targets = opts.targets ?? (topUp ? topUpTargets(weak, layout) : opts.quick && baseline.samples > 0 ? quickTargets(layout) : defaultTargets(layout));
+      // a moving-dot phase follows the dots (not for a top-up or a custom target list)
+      const pursuitMs = opts.pursuitMs ?? (topUp || opts.targets ? 0 : DEFAULT_PURSUIT_MS);
       const ui = opts.onTarget
         ? { show: opts.onTarget, progress: opts.onProgress ?? (() => {}), destroy() {} }
         : typeof document !== 'undefined' ? createCalibrationOverlay(opts.area, () => session?.abort()) : { show() {}, progress() {}, destroy() {} };
 
       return new Promise(resolve => {
         session = engine.session = new CalibrationSession({
-          targets, ...opts.capture,
-          onTarget: (target, index) => { ui.show(target, index, targets.length); source.lookAt?.(target); },
+          targets, pursuitMs, ...opts.capture,
+          onTarget: (target, index, info) => { ui.show(target, index, targets.length, info); source.lookAt?.(target); },
           onProgress: p => ui.progress(p),
           onDone: (points, info) => {
             session = engine.session = null;

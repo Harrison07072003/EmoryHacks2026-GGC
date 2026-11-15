@@ -19,23 +19,38 @@ function score(file) {
   const rec = JSON.parse(readFileSync(file, 'utf8')), cal = evaluateRecording(rec), c = conditionsOf(rec);
   const play = evaluatePlay(rec)?.replay;
   return {
-    clip: basename(file, '.json'),
+    clip: basename(file, '.json'), version: rec.meta?.version ?? '0.1',
     partial: cal.dots > 0 && cal.dots < 12 ? cal.dots : 0,
     cal: cal.dots >= 12 ? { dots: cal.dots, score: cal.fullScore, 'x err %': pct(cal.errorX), 'y err %': pct(cal.errorY), 'lanes %': pct(cal.laneAccuracy), 'bands %': pct(cal.bandAccuracy) } : null,
     play: play ? {
-      'jump hit %': pct(play.jumps?.hitRate), 'jump ms': play.jumps?.reactionMs ?? null, 'jump on %': pct(play.jumps?.onTarget),
+      'jump hit %': pct(play.jumps?.hitRate), 'jump ms': play.jumps?.reactionMs == null ? null : Math.round(play.jumps.reactionMs), 'jump on %': pct(play.jumps?.onTarget),
       'path err %': pct(play.path?.errorAtLag), 'path lag ms': play.path?.lagMs ?? null, 'path lane %': pct(play.path?.lane),
-      'switch hit %': pct(play.switch?.hitRate), 'switch ms': play.switch?.reactionMs ?? null, 'switch on %': pct(play.switch?.onTarget),
+      'switch hit %': pct(play.switch?.hitRate), 'switch ms': play.switch?.reactionMs == null ? null : Math.round(play.switch.reactionMs), 'switch on %': pct(play.switch?.onTarget),
     } : null,
     cond: { light: Math.round(c.light), contrast: +c.pupilContrast.toFixed(2), 'glare %': pct(c.glare), fps: Math.round(c.fps) },
   };
+}
+
+/** One row per condition (the part of the clip name before the date), averaged over its clips. */
+function byCondition(results) {
+  const groups = new Map();
+  for (const r of results) { const key = r.clip.replace(/_\d{4}-\d\d-\d\d-[\d-]+$/, ''); (groups.get(key) ?? groups.set(key, []).get(key)).push(r); }
+  const avg = (rs, pick) => { const v = rs.map(pick).filter(Number.isFinite); return v.length ? Math.round(mean(v)) : null; };
+  const rows = [...groups].map(([condition, rs]) => ({
+    condition, clips: rs.length,
+    'cal score': avg(rs, r => r.cal?.score), 'y err %': avg(rs, r => r.cal?.['y err %']),
+    'jump on %': avg(rs, r => r.play?.['jump on %']), 'switch on %': avg(rs, r => r.play?.['switch on %']),
+    'path lane %': avg(rs, r => r.play?.['path lane %']), light: avg(rs, r => r.cond.light),
+  }));
+  console.log('\nBY CONDITION (averages; "on %" = share of time on the right cell during the test run)');
+  console.table(rows);
 }
 
 function table(title, rows) {
   if (!rows.length) return;
   console.log(`\n${title}`);
   console.table(rows);
-  const keys = Object.keys(rows[0]).slice(1);
+  const keys = Object.keys(rows[0]).filter(k => k !== 'clip' && k !== 'v');
   const avg = Object.fromEntries(keys.map(k => { const v = rows.map(r => r[k]).filter(Number.isFinite); return [k, v.length ? +mean(v).toFixed(1) : null]; }));
   console.log(`average of ${rows.length}:`, avg);
 }
@@ -50,11 +65,12 @@ if (statSync(target).isDirectory()) {
     } catch (e) { skipped.push(`${name} (${e.message})`); }
   }
   if (!results.length) { console.log(`No scorable clips in ${target}.`); process.exit(0); }
-  table('CALIBRATION DOTS (held-out: calibrated on half the dots, tested on the rest)', results.filter(r => r.cal).map(r => ({ clip: r.clip, ...r.cal, ...r.cond })));
-  table('TEST RUN (replayed through the current code)', results.filter(r => r.play).map(r => ({ clip: r.clip, ...r.play })));
+  table('CALIBRATION DOTS (held-out: calibrated on half the dots, tested on the rest)', results.filter(r => r.cal).map(r => ({ clip: r.clip, v: r.version, ...r.cal, ...r.cond })));
+  table('TEST RUN (replayed through the current code)', results.filter(r => r.play).map(r => ({ clip: r.clip, v: r.version, ...r.play })));
+  byCondition(results);
   if (skipped.length) console.log(`\nSkipped: ${skipped.join(', ')}`);
   const cols = ['dots', 'score', 'x err %', 'y err %', 'lanes %', 'bands %', 'jump hit %', 'jump ms', 'jump on %', 'path err %', 'path lag ms', 'path lane %', 'switch hit %', 'switch ms', 'switch on %', 'light', 'contrast', 'glare %', 'fps'];
-  const csv = [['clip', ...cols].join(','), ...results.map(r => { const all = { ...r.cal, ...r.play, ...r.cond }; return [r.clip, ...cols.map(k => all[k] ?? '')].join(','); })];
+  const csv = [['clip', 'version', ...cols].join(','), ...results.map(r => { const all = { ...r.cal, ...r.play, ...r.cond }; return [r.clip, r.version, ...cols.map(k => all[k] ?? '')].join(','); })];
   writeFileSync(join(target, 'scores.csv'), csv.join('\n') + '\n');
   console.log(`\nWrote ${join(target, 'scores.csv')}`);
 } else {

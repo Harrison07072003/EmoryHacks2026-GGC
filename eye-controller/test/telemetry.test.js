@@ -47,7 +47,7 @@ describe('sample event', () => {
     const done = eyes.startCalibration({ onTarget() {} });
     eyes.mock.step(60000); await done;
     expect([...sources]).toEqual(['calibration', null]);
-    expect(results[0].points).toHaveLength(16);
+    expect(results[0].points).toHaveLength(17);   // 16 dots + the moving-dot phase
   });
   it('reports no gaze when there is no face', async () => {
     const eyes = createMockEyeController({ clock: 'manual' });

@@ -43,6 +43,15 @@ describe('pupil finder', () => {
     expect(filled / POSITIONS.length).toBeLessThan(1);
   });
 
+  it('at the full 128x64 crop, finds the pupil to within a fraction of the old pixel', () => {
+    for (const { x, y } of POSITIONS) {
+      const pupil = { x: x * 2, y: y * 2 }, img = drawEye({ pupil, width: 128, height: 64 });
+      expect(errorPx(img, pupil) / 2).toBeLessThan(0.5);    // in 64-px units, to compare with the old crop
+      const glinted = drawEye({ pupil, width: 128, height: 64, glint: { dx: 2, dy: -1.5, r: 2.2 } });
+      expect(errorPx(glinted, pupil) / 2).toBeLessThan(1);
+    }
+  });
+
   it('reports glare and contrast', () => {
     const clean = findPupil(drawEye({ pupil: { x: 32, y: 16 } }));
     const glary = findPupil(drawEye({ pupil: { x: 32, y: 16 }, glint: { dx: 6, dy: 0, r: 5 } }));

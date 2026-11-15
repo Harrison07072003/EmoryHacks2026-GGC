@@ -103,20 +103,23 @@ describe('calibration through the contract', () => {
     eyes.mock.step(500);
     expect(eyes.state).toMatchObject({ ready: false, lane: null, calibrationScore: null });
     const shown = [];
-    const done = eyes.startCalibration({ onTarget: t => shown.push(t) });
+    let moving = 0;
+    const done = eyes.startCalibration({ onTarget: (t, _i, _n, info) => (info?.moving ? moving++ : shown.push(t)) });
     eyes.mock.step(60000);
     const result = await done;
     expect(shown.filter(Boolean)).toHaveLength(16);
+    expect(moving).toBeGreaterThan(250);                         // ~11 s moving-dot phase, one call per frame
     expect(result.ok).toBe(true);
     expect(result.score).toBeGreaterThanOrEqual(80);
-    expect(result.points).toHaveLength(16);
+    expect(result.points.filter(p => p.score !== null)).toHaveLength(16);
+    expect(result.points.at(-1)).toMatchObject({ score: null, kept: true });   // the moving dot is never scored
     look(eyes, { x: 0.875, y: 0.75 });
     expect(eyes.state).toMatchObject({ lane: 3, band: 'bottom', ready: true });
   });
   it('refuses play after a bad calibration, then a top-up of the weak cells fixes it', async () => {
     const eyes = mock({ seed: 12, autoCalibrate: false });
     await eyes.init();
-    const first = eyes.startCalibration({ onTarget: t => eyes.mock.setConditions(t && t.x > 0.5 ? { light: 'bad', glare: true } : { light: 'good', glare: false }) });
+    const first = eyes.startCalibration({ pursuitMs: 0, onTarget: t => eyes.mock.setConditions(t && t.x > 0.5 ? { light: 'bad', glare: true } : { light: 'good', glare: false }) });
     eyes.mock.step(120000);
     const bad = await first;
     expect(bad.ok).toBe(false);
@@ -180,7 +183,7 @@ describe('profiles and the pooled baseline through the contract', () => {
     await away.importBaseline(exported);
     expect((await away.exportBaseline()).players).toBe(4);
     const shown = [];
-    const done = away.startCalibration({ quick: true, onTarget: t => t && shown.push(t) });
+    const done = away.startCalibration({ quick: true, onTarget: (t, _i, _n, info) => t && !info?.moving && shown.push(t) });
     away.mock.step(60000);
     const result = await done;
     expect(shown).toHaveLength(8);

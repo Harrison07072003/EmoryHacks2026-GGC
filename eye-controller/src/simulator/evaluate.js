@@ -4,13 +4,15 @@ import { steadinessOf } from '../calibration/scoring.js';
 import { predictGaze } from '../model/gaze-model.js';
 import { cellOf, DEFAULT_LAYOUT, laneOf, bandOf } from '../signals/lanes.js';
 import { mean } from '../util/math.js';
+import { PURSUIT_LAG_MS } from '../calibration/session.js';
 
 /** Split a recording into one point per stretch of frames that share a target. */
 export function labelledPoints(recording, { settleMs = 500, maxSamples = 18 } = {}) {
   const points = [];
   let cur = null;
   for (const fr of recording.frames) {
-    const tg = fr.src === 'game' ? null : fr.target; // older clips have no src: all calibration
+    // older clips have no src: all calibration. The moving-dot phase is not a dot.
+    const tg = fr.src === 'game' || fr.tid === 'pursuit' ? null : fr.target;
     if (!tg) { cur = null; continue; }
     if (!cur || cur.target.x !== tg.x || cur.target.y !== tg.y) points.push((cur = { target: tg, t0: fr.t, samples: [] }));
     if (fr.face && !fr.blink && fr.t - cur.t0 >= settleMs) cur.samples.push(fr.f);
@@ -19,6 +21,20 @@ export function labelledPoints(recording, { settleMs = 500, maxSamples = 18 } = 
     const samples = p.samples.slice(-maxSamples);
     return { target: p.target, samples, steadiness: steadinessOf(samples) };
   });
+}
+
+/** The calibration moving-dot phase as one point, labelled with the delayed target like live. */
+export function pursuitPoint(recording) {
+  const frames = recording.frames.filter(f => f.src !== 'game' && f.tid === 'pursuit');
+  if (frames.length < 10) return null;
+  const t0 = frames[0].t, samples = [], targets = [];
+  let j = 0;
+  for (const fr of frames) {
+    while (j < frames.length - 1 && frames[j + 1].t <= fr.t - PURSUIT_LAG_MS) j++;
+    if (fr.t - t0 < 800 + PURSUIT_LAG_MS || !fr.face || fr.blink) continue;
+    samples.push(fr.f); targets.push(frames[j].target);
+  }
+  return samples.length ? { kind: 'pursuit', target: { x: 0.5, y: 0.5 }, samples, targets, steadiness: 1 } : null;
 }
 
 /** Average capture conditions over the frames with a face: frame rate, light, contrast, glare. */
@@ -43,8 +59,9 @@ export function conditionsOf(recording) {
 export function evaluateRecording(recording, { layout = DEFAULT_LAYOUT, prior = null } = {}) {
   const points = labelledPoints(recording);
   const train = points.filter((_, i) => i % 2 === 0), test = points.filter((_, i) => i % 2 === 1);
-  const fit = fitCalibration(train, { layout, prior });
-  const summary = { dots: points.length, fullScore: points.length ? fitCalibration(points, { layout, prior }).score : 0, calibrationScore: fit.score };
+  const pursuit = pursuitPoint(recording), withPursuit = list => (pursuit ? [...list, pursuit] : list);
+  const fit = fitCalibration(withPursuit(train), { layout, prior });
+  const summary = { dots: points.length, pursuit: !!pursuit, fullScore: points.length ? fitCalibration(withPursuit(points), { layout, prior }).score : 0, calibrationScore: fit.score };
   if (!fit.model || !test.length) return { ...summary, meanError: NaN, errorX: NaN, errorY: NaN, laneAccuracy: NaN, bandAccuracy: NaN, perPoint: [] };
   let laneHits = 0, bandHits = 0, cellFrames = 0;
   const perPoint = test.map(p => {

@@ -19,8 +19,8 @@ npm run fetch-model
 2. Type your **player name** (e.g. `jon`). It is remembered.
 3. The checklist selects the first condition that still needs clips. Click a condition to
    read what to change; set the room up for it.
-4. Press **Record clip** (or Enter). Each clip is about 75 seconds:
-   - calibration: 16 dots, look at each until it fills
+4. Press **Record clip** (or Enter). Each clip is about 90 seconds:
+   - calibration: 16 dots, look at each until it fills, then follow a moving dot (~11 s)
    - 1.5 s countdown, then the test run:
      - **jumps**: notes hop between lanes in the top band. Look at each one.
      - **path**: a dot glides along the bottom band. Follow it with your eyes.

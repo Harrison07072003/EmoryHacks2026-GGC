@@ -12,6 +12,7 @@ export function toProfile(id, calibration) {
     points: calibration.points.map(p => ({
       target: p.target, steadiness: round(p.steadiness ?? 0, 3), weak: !!p.weak, kept: p.kept, score: p.score,
       samples: p.samples.map(f => f.map(v => round(v))),
+      ...(p.kind ? { kind: p.kind, targets: p.targets.map(t => ({ x: round(t.x, 4), y: round(t.y, 4) })) } : {}),
     })),
   };
 }
