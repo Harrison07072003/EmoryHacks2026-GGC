@@ -32,6 +32,12 @@ create table if not exists game_results (
   engine_version    text,
   feature_version   integer
 );
+-- Columns the game's result record also carries (added after first deploy; safe to re-run).
+alter table game_results
+  add column if not exists song_title text,
+  add column if not exists mode_label text,
+  add column if not exists total_judgments integer,
+  add column if not exists practice boolean;
 create index if not exists game_results_song on game_results (song_id, difficulty, score desc);
 
 -- Calibration metadata: one row per calibration run (full, quick or between songs).

@@ -34,20 +34,23 @@ describe('game store (Supabase)', () => {
     expect(supabaseConfig({ VITE_SUPABASE_URL: 'https://x.supabase.co/', VITE_SUPABASE_ANON_KEY: 'k' })).toEqual({ url: 'https://x.supabase.co', key: 'k' });
   });
 
-  it('upserts on id, and keeps failed rows in the outbox for retry', async () => {
+  it('inserts with a stable id, treats 409 as stored, and keeps failed rows in the outbox for retry', async () => {
     const calls = [];
     let up = false;
     const fetchFn = async (url, init) => { calls.push({ url, init }); return up ? { ok: true } : { ok: false, status: 503, text: async () => 'down' }; };
     const kv = memoryStore();
     const store = createGameStore(kv, createSupabaseClient({ url: 'https://x', key: 'k' }, fetchFn));
     const row = await store.saveResult(result());
-    expect(calls[0].url).toBe('https://x/rest/v1/game_results?on_conflict=id');
-    expect(calls[0].init.headers.Prefer).toContain('ignore-duplicates');
+    expect(calls[0].url).toBe('https://x/rest/v1/game_results');
+    expect(calls[0].init.headers.Prefer).toBe('return=minimal');
     expect(store.status.pending).toBe(1);
     expect(store.status.lastError).toContain('503');
     up = true;
     expect(await store.flushOutbox()).toBe(true);
     expect(JSON.parse(calls.at(-1).init.body)[0].id).toBe(row.id); // same id on retry: no duplicates
     expect(store.status.pending).toBe(0);
+    // a duplicate id answers 409: already stored, so it leaves the outbox
+    const dup = createSupabaseClient({ url: 'https://x', key: 'k' }, async () => ({ ok: false, status: 409, text: async () => 'dup' }));
+    await expect(dup.upsert('game_results', [row])).resolves.toBeUndefined();
   });
 });
